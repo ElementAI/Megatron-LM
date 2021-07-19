@@ -51,7 +51,9 @@ from megatron.schedules import forward_backward_no_pipelining
 from megatron.schedules import forward_backward_pipelining_without_interleaving
 from megatron.schedules import forward_backward_pipelining_with_interleaving
 from megatron.utils import report_memory
+import logging
 
+logger = logging.getLogger(__name__)
 
 
 def print_datetime(string):
@@ -91,6 +93,7 @@ def pretrain(train_valid_test_dataset_provider,
     """
 
     # Initalize and get arguments, timers, and Tensorboard writer.
+    logger.info("Initializing megatron")
     initialize_megatron(extra_args_provider=extra_args_provider,
                         args_defaults=args_defaults)
 
@@ -102,7 +105,7 @@ def pretrain(train_valid_test_dataset_provider,
     torch.distributed.all_reduce(start_time_tensor,
                                  op=torch.distributed.ReduceOp.MIN)
     _TRAIN_START_TIME = start_time_tensor.item()
-    print_rank_0('time to initialize megatron (seconds): {:.3f}'.format(
+    logger.info('time to initialize megatron (seconds): {:.3f}'.format(
         time.time() - _TRAIN_START_TIME))
     print_datetime('after megatron is initialized')
 
@@ -829,8 +832,10 @@ def build_train_valid_test_data_iterators(
         # Need to broadcast num_tokens and num_type_tokens.
         flags = torch.cuda.LongTensor(
             [int(do_train), int(do_valid), int(do_test)])
+        logger.info("Broadcasting data iterator")
     else:
         flags = torch.cuda.LongTensor([0, 0, 0])
+        logger.info("Waiting for data iterator")
 
     # Broadcast num tokens.
     torch.distributed.broadcast(flags,

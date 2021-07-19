@@ -22,6 +22,8 @@ import setuptools
 if sys.version_info < (3,):
     raise Exception("Python 2 is not supported by Megatron.")
 
+os.environ["MEGATRON_SETUP"]="TRUE"
+
 from megatron.package_info import (
     __description__,
     __contact_names__,

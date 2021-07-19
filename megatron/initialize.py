@@ -30,7 +30,8 @@ from megatron import mpu
 from megatron.global_vars import set_global_variables
 from megatron.mpu import (set_tensor_model_parallel_rank,
                           set_tensor_model_parallel_world_size)
-
+import logging
+logger = logging.getLogger(__name__)
 
 def initialize_megatron(extra_args_provider=None, args_defaults={},
                         ignore_unknown_args=False, allow_no_cuda=False):
@@ -60,7 +61,7 @@ def initialize_megatron(extra_args_provider=None, args_defaults={},
         
         # Random seeds for reproducibility.
         if args.rank == 0:
-            print('> setting random seeds to {} ...'.format(args.seed))
+            logger.info('> setting random seeds to {} ...'.format(args.seed))
         _set_random_seed(args.seed)
 
     args = get_args()
@@ -100,11 +101,11 @@ def _compile_dependencies():
     # TODO: move this to ninja
     if torch.distributed.get_rank() == 0:
         start_time = time.time()
-        print('> compiling dataset index builder ...')
+        logger.info('> compiling dataset index builder ...')
         from megatron.data.dataset_utils import compile_helper
         compile_helper()
-        print('>>> done with dataset index builder. Compilation time: {:.3f} '
-              'seconds'.format(time.time() - start_time), flush=True)
+        logger.info('>>> done with dataset index builder. Compilation time: {:.3f} '
+              'seconds'.format(time.time() - start_time))
 
     # ==================
     # Load fused kernels
@@ -123,29 +124,37 @@ def _compile_dependencies():
     if not ((args.fp16 or args.bf16) and
             custom_kernel_constraint and
             args.masked_softmax_fusion):
-        if args.rank == 0:
-            print('WARNING: constraints for invoking optimized'
-                  ' fused softmax kernel are not met. We default'
-                  ' back to unfused kernel invocations.', flush=True)
-    
+        logger.warning('constraints for invoking optimized'
+              ' fused softmax kernel are not met. We default'
+              ' back to unfused kernel invocations.')
+
+    start_time = time.time()
+    logger.info(f'> compiling and loading fused kernels ...')
+    fused_kernels.load(args)
+    logger.info("Compile done, waiting for others to compile")
+    torch.distributed.barrier()
     # Always build on rank zero first.
-    if torch.distributed.get_rank() == 0:
-        start_time = time.time()
-        print('> compiling and loading fused kernels ...', flush=True)
-        fused_kernels.load(args)
-        torch.distributed.barrier()
-    else:
-        torch.distributed.barrier()
-        fused_kernels.load(args)
+    # if torch.distributed.get_rank() == 0:
+    #     start_time = time.time()
+    #     logger.info(f'> compiling and loading fused kernels ... (rank = {torch.distributed.get_rank()})')
+    #     fused_kernels.load(args)
+    #     logger.info("Compile done, waiting on barrier")
+    #     torch.distributed.barrier()
+    #     logger.info("Barrier done, waiting for others to compile")
+    # else:
+    #     logger.info("Waiting for rank 0 to compile")
+    #     torch.distributed.barrier()
+    #     logger.info(f'> compiling and loading fused kernels ... (rank = {torch.distributed.get_rank()})')
+    #     fused_kernels.load(args)
+    #     logger.info("Compile done, waiting on barrier")
     # Simple barrier to make sure all ranks have passed the
     # compilation phase successfully before moving on to the
     # rest of the program. We think this might ensure that
     # the lock is released.
-    torch.distributed.barrier()
-    if torch.distributed.get_rank() == 0:
-        print('>>> done with compiling and loading fused kernels. '
-              'Compilation time: {:.3f} seconds'.format(
-                  time.time() - start_time), flush=True)
+    #torch.distributed.barrier()
+    logger.info('>>> done with compiling and loading fused kernels. '
+          'Compilation time: {:.3f} seconds'.format(
+              time.time() - start_time))
 
 
 
@@ -157,15 +166,15 @@ def _initialize_distributed():
     if torch.distributed.is_initialized():
 
         if args.rank == 0:
-            print('torch distributed is already initialized, '
-                  'skipping initialization ...', flush=True)
+            logger.info('torch distributed is already initialized, '
+                  'skipping initialization ...')
         args.rank = torch.distributed.get_rank()
         args.world_size = torch.distributed.get_world_size()
 
     else:
 
         if args.rank == 0:
-            print('> initializing torch distributed ...', flush=True)
+            logger.info('> initializing torch distributed ...')
         # Manually set the device ids.
         if device_count > 0:
             device = args.rank % device_count
@@ -189,7 +198,7 @@ def _initialize_distributed():
     # data-parallel communicators.
     if device_count > 0:
         if mpu.model_parallel_is_initialized():
-            print('model parallel is already initialized')
+            logger.info('model parallel is already initialized')
         else:
             mpu.initialize_model_parallel(args.tensor_model_parallel_size,
                                           args.pipeline_model_parallel_size,

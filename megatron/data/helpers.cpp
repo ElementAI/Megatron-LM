@@ -26,6 +26,8 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <random>
+#include <iomanip>
+#include <ctime>
 
 namespace py = pybind11;
 using namespace std;
@@ -283,12 +285,20 @@ py::array build_mapping_impl(const py::array_t<int64_t>& docs_,
         // For each epoch:
         for (int32_t epoch=0; epoch<num_epochs; ++epoch) {
             if (map_index >= max_num_samples) {
-	        if (verbose && (!second)) {
-		  cout << "    reached " << max_num_samples << " samples after "
-		       << epoch << " epochs ..." << endl << std::flush;
-		}
+              if (verbose && (!second)) {
+                cout << "    reached " << max_num_samples << " samples after "
+                  << epoch << " epochs ..." << endl << std::flush;
+              }
                 break;
             }
+
+            if (verbose && map_index % (max_num_samples / 100) == 0) {
+                auto t = std::time(nullptr);
+                auto tm = *std::localtime(&t);
+                cout << "    reached " << map_index << "/" << max_num_samples << " samples after "
+                     << epoch << " epochs ..." << std::put_time(&tm, "%d-%m-%Y %H-%M-%S") << endl << std::flush;
+            }
+        
             // For each document:
             for (int32_t doc=0; doc<(docs.shape(0) - 1); ++doc) {
 
@@ -540,6 +550,7 @@ py::array build_blocks_mapping_impl(const py::array_t<int64_t>& docs_,
         for (int32_t epoch=0; epoch<num_epochs; ++epoch) {
             // assign every block a unique id
             int32_t block_id = 0;
+
 
             if (map_index >= max_num_samples) {
                 if (verbose && (!second)) {

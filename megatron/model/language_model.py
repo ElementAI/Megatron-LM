@@ -178,15 +178,21 @@ class Embedding(MegatronModule):
 
     def forward(self, input_ids, position_ids, tokentype_ids=None):
         # Embeddings.
+        metrics={}
         words_embeddings = self.word_embeddings(input_ids)
+        metrics["words_embeddings"]=words_embeddings.std()
         position_embeddings = self.position_embeddings(position_ids)
+        metrics["position_embeddings"]=position_embeddings.std()
         embeddings = words_embeddings + position_embeddings
         if tokentype_ids is not None:
             assert self.tokentype_embeddings is not None
-            embeddings = embeddings + self.tokentype_embeddings(tokentype_ids)
+            tokentype_embeddings=self.tokentype_embeddings(tokentype_ids)
+            metrics["tokentype_embeddings"]=tokentype_embeddings.std()
+            embeddings = embeddings + tokentype_embeddings
         else:
             assert self.tokentype_embeddings is None
-
+        
+        print({key:value.detach().cpu().item() for key, value in metrics.items()})
         # Dropout.
         embeddings = self.embedding_dropout(embeddings)
 

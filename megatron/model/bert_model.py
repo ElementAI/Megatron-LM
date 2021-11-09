@@ -86,13 +86,20 @@ class BertLMHead(MegatronModule):
             self.gelu = erf_gelu
 
     def forward(self, hidden_states, word_embeddings_weight):
+        metrics={}
+        metrics["hidden_scale"]=hidden_states.std()
         hidden_states = self.dense(hidden_states)
+        metrics["dense_scale"]=hidden_states.std()
         hidden_states = self.gelu(hidden_states)
+        metrics["gelu_scale"]=hidden_states.std()
         hidden_states = self.layernorm(hidden_states)
+        metrics["ln_scale"]=hidden_states.std()
         output = parallel_lm_logits(hidden_states,
                                     word_embeddings_weight,
                                     self.parallel_output,
                                     bias=self.bias)
+        metrics["logits_scale"]=output.std()
+        print({key:value.detach().cpu().item() for key, value in metrics.items()})
         return output
 
 

@@ -91,13 +91,26 @@ class Pooler(MegatronModule):
     def __init__(self, hidden_size, init_method):
         super(Pooler, self).__init__()
         self.dense = get_linear_layer(hidden_size, hidden_size, init_method)
+        self.dense.weight.name_="output_layer.sop_head.dense.weight"
+        self.dense.bias.name_="output_layer.sop_head.dense.bias"
 
     def forward(self, hidden_states, sequence_index=0):
         # hidden_states: [b, s, h]
         # sequence_index: index of the token to pool.
+        args=get_args()
+        if args.iteration % args.log_interval == 0:
+            metrics={}
+            metrics["pooler_hidden"]=hidden_states.std()
         pooled = hidden_states[:, sequence_index, :]
+        if args.iteration % args.log_interval == 0:
+            metrics["pooler_pooled"]=pooled.std()
         pooled = self.dense(pooled)
+        if args.iteration % args.log_interval == 0:
+            metrics["pooler_dense"]=pooled.std()
         pooled = torch.tanh(pooled)
+        if args.iteration % args.log_interval == 0:
+            metrics["pooler_output"]=pooled.std()
+            print({key:value.detach().cpu().item() for key, value in metrics.items()})
         return pooled
 
 
@@ -135,11 +148,13 @@ class Embedding(MegatronModule):
             vocab_size, self.hidden_size,
             init_method=self.init_method)
         self._word_embeddings_key = 'word_embeddings'
+        self.word_embeddings.weight.name_="input_layer.word_embeddings.weight"
 
         # Position embedding (serial).
         self.position_embeddings = torch.nn.Embedding(
             max_sequence_length, self.hidden_size)
         self._position_embeddings_key = 'position_embeddings'
+        self.position_embeddings.weight.name_="input_layer.position_embeddings.weight"
         # Initialize the position embeddings.
         self.init_method(self.position_embeddings.weight)
 
@@ -152,6 +167,7 @@ class Embedding(MegatronModule):
             self.tokentype_embeddings = torch.nn.Embedding(self.num_tokentypes,
                                                            self.hidden_size)
             # Initialize the token-type embeddings.
+            self.tokentype_embeddings.weight.name_="input_layer.tokentype_embeddings.weight"
             self.init_method(self.tokentype_embeddings.weight)
         else:
             self.tokentype_embeddings = None
@@ -178,21 +194,27 @@ class Embedding(MegatronModule):
 
     def forward(self, input_ids, position_ids, tokentype_ids=None):
         # Embeddings.
-        metrics={}
+        args=get_args()
+        if args.iteration % args.log_interval == 0:
+            metrics={}
         words_embeddings = self.word_embeddings(input_ids)
-        metrics["words_embeddings"]=words_embeddings.std()
+        if args.iteration % args.log_interval == 0:
+            metrics["words_embeddings"]=words_embeddings.std()
         position_embeddings = self.position_embeddings(position_ids)
-        metrics["position_embeddings"]=position_embeddings.std()
+        if args.iteration % args.log_interval == 0:
+            metrics["position_embeddings"]=position_embeddings.std()
         embeddings = words_embeddings + position_embeddings
         if tokentype_ids is not None:
             assert self.tokentype_embeddings is not None
             tokentype_embeddings=self.tokentype_embeddings(tokentype_ids)
-            metrics["tokentype_embeddings"]=tokentype_embeddings.std()
+            if args.iteration % args.log_interval == 0:
+                metrics["tokentype_embeddings"]=tokentype_embeddings.std()
             embeddings = embeddings + tokentype_embeddings
         else:
             assert self.tokentype_embeddings is None
-        
-        print({key:value.detach().cpu().item() for key, value in metrics.items()})
+
+        if args.iteration % args.log_interval == 0:
+            print({key:value.detach().cpu().item() for key, value in metrics.items()})
         # Dropout.
         embeddings = self.embedding_dropout(embeddings)
 
@@ -352,6 +374,10 @@ class TransformerLanguageModel(MegatronModule):
         else:
             encoder_input = None
 
+        args=get_args()
+        if args.iteration % args.log_interval == 0:
+            metrics = {}
+            metrics["encoder_input"] = encoder_input.std()
         # encoder.
         if enc_hidden_states is None:
             encoder_output = self.encoder(encoder_input,
@@ -361,6 +387,9 @@ class TransformerLanguageModel(MegatronModule):
         else:
             encoder_output = enc_hidden_states.to(encoder_input.dtype)
 
+        if args.iteration % args.log_interval == 0:
+            metrics["encoder_output"] = encoder_output.std()
+            print({key:value.detach().cpu().item() for key, value in metrics.items()})
         if self.post_process:
             if self.add_pooler:
                 pooled_output = self.pooler(encoder_output,

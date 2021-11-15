@@ -406,6 +406,17 @@ class Float16OptimizerWithFloat16Params(MegatronOptimizer):
         num_zeros_in_grad = self.count_zeros() if \
                             self.log_num_zeros_in_grad else None
 
+        from megatron import get_args
+        args=get_args()
+        if args.iteration==1:
+            for group in self.optimizer.param_groups:
+                for p in group['params']:
+                    print(
+                        p.detach().float().std().cpu().item(),
+                        p.grad.detach().float().std().cpu().item(),
+                        getattr(p, "name_", "unknown"),
+                        p.shape
+                    )
         # Step the optimizer.
         self.optimizer.step()
 
@@ -504,6 +515,19 @@ class FP32Optimizer(MegatronOptimizer):
         num_zeros_in_grad = self.count_zeros() if \
                             self.log_num_zeros_in_grad else None
 
+        from megatron import get_args
+        args=get_args()
+        if args.iteration % args.log_interval == 0:
+            for group in self.optimizer.param_groups:
+                for p in group['params']:
+                    g=p.grad.detach().float()
+                    print(
+                        p.detach().float().std().cpu().item(),
+                        g.std().cpu().item(),
+                        torch.norm(g, 2).cpu().item(),
+                        getattr(p, "name_", "unknown"),
+                        p.shape
+                    )
         # Update parameters.
         self.optimizer.step()
 

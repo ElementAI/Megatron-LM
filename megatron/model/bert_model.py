@@ -74,11 +74,16 @@ class BertLMHead(MegatronModule):
         args = get_args()
 
         self.bias = torch.nn.Parameter(torch.zeros(mpu_vocab_size))
+        self.bias.name_="output_layer.lm_head.logits.bias"
         mpu.set_tensor_model_parallel_attributes(self.bias, True, 0, 1)
         self.parallel_output = parallel_output
 
         self.dense = get_linear_layer(hidden_size, hidden_size, init_method)
+        self.dense.weight.name_="output_layer.lm_head.dense.weight"
+        self.dense.bias.name_="output_layer.lm_head.dense.bias"
         self.layernorm = LayerNorm(hidden_size, eps=layernorm_epsilon)
+        self.layernorm.weight.name_="output_layer.lm_head.layernorm.weight"
+        self.layernorm.bias.name_="output_layer.lm_head.layernorm.bias"
         self.gelu = torch.nn.functional.gelu
         if args.openai_gelu:
             self.gelu = openai_gelu
@@ -86,20 +91,26 @@ class BertLMHead(MegatronModule):
             self.gelu = erf_gelu
 
     def forward(self, hidden_states, word_embeddings_weight):
-        metrics={}
-        metrics["hidden_scale"]=hidden_states.std()
+        args=get_args()
+        if args.iteration % args.log_interval == 0:
+            metrics={}
+            metrics["hidden_scale"]=hidden_states.std()
         hidden_states = self.dense(hidden_states)
-        metrics["dense_scale"]=hidden_states.std()
+        if args.iteration % args.log_interval == 0:
+            metrics["dense_scale"]=hidden_states.std()
         hidden_states = self.gelu(hidden_states)
-        metrics["gelu_scale"]=hidden_states.std()
+        if args.iteration % args.log_interval == 0:
+            metrics["gelu_scale"]=hidden_states.std()
         hidden_states = self.layernorm(hidden_states)
-        metrics["ln_scale"]=hidden_states.std()
+        if args.iteration % args.log_interval == 0:
+            metrics["ln_scale"]=hidden_states.std()
         output = parallel_lm_logits(hidden_states,
                                     word_embeddings_weight,
                                     self.parallel_output,
                                     bias=self.bias)
-        metrics["logits_scale"]=output.std()
-        print({key:value.detach().cpu().item() for key, value in metrics.items()})
+        if args.iteration % args.log_interval == 0:
+            metrics["logits_scale"]=output.std()
+            print({key:value.detach().cpu().item() for key, value in metrics.items()})
         return output
 
 
@@ -114,7 +125,14 @@ def post_language_model_processing(lm_output, pooled_output,
 
     binary_logits = None
     if binary_head is not None:
+        args=get_args()
+        if args.iteration % args.log_interval == 0:
+            metrics={}
+            metrics["pooled_output"]=pooled_output.std()
         binary_logits = binary_head(pooled_output)
+        if args.iteration % args.log_interval == 0:
+            metrics["binary_logits"]=binary_logits.std()
+            print({key:value.detach().cpu().item() for key, value in metrics.items()})
 
     if lm_labels is None:
         return lm_logits, binary_logits
@@ -169,6 +187,8 @@ class BertModel(MegatronModule):
             if self.add_binary_head:
                 self.binary_head = get_linear_layer(args.hidden_size, 2,
                                                     init_method)
+                self.binary_head.weight.name_="output_layer.sop_head.binary_head.weight"
+                self.binary_head.bias.name_="output_layer.sop_head.binary_head.bias"
                 self._binary_head_key = 'binary_head'
 
     def set_input_tensor(self, input_tensor):

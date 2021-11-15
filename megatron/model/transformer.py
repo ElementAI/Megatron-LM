@@ -57,7 +57,7 @@ class ParallelMLP(MegatronModule):
     applied.
     """
 
-    def __init__(self, init_method, output_layer_init_method):
+    def __init__(self, init_method, output_layer_init_method, layer_number):
         super(ParallelMLP, self).__init__()
         args = get_args()
 
@@ -68,6 +68,8 @@ class ParallelMLP(MegatronModule):
             gather_output=False,
             init_method=init_method,
             skip_bias_add=True)
+        self.dense_h_to_4h.weight.name_=f"layer_{layer_number}.mlp.dense_0.weight"
+        self.dense_h_to_4h.bias.name_=f"layer_{layer_number}.mlp.dense_0.bias"
 
         self.bias_gelu_fusion = args.bias_gelu_fusion
         self.activation_func = F.gelu
@@ -83,6 +85,8 @@ class ParallelMLP(MegatronModule):
             input_is_parallel=True,
             init_method=output_layer_init_method,
             skip_bias_add=True)
+        self.dense_4h_to_h.weight.name_=f"layer_{layer_number}.mlp.dense_1.weight"
+        self.dense_4h_to_h.bias.name_=f"layer_{layer_number}.mlp.dense_1.bias"
 
 
     def forward(self, hidden_states):
@@ -144,6 +148,8 @@ class ParallelAttention(MegatronModule):
                 3 * projection_size,
                 gather_output=False,
                 init_method=init_method)
+            self.query_key_value.weight.name_=f"layer_{layer_number}.attention.query_key_value.weight"
+            self.query_key_value.bias.name_=f"layer_{layer_number}.attention.query_key_value.bias"
         else:
             assert attention_type == AttnType.cross_attn
             self.query = mpu.ColumnParallelLinear(
@@ -151,12 +157,16 @@ class ParallelAttention(MegatronModule):
                 projection_size,
                 gather_output=False,
                 init_method=init_method)
+            self.query.weight.name_=f"layer_{layer_number}.attention.query.weight"
+            self.query.bias.name_=f"layer_{layer_number}.attention.query.bias"
 
             self.key_value = mpu.ColumnParallelLinear(
                 args.hidden_size,
                 2 * projection_size,
                 gather_output=False,
                 init_method=init_method)
+            self.key_value.weight.name_=f"layer_{layer_number}.attention.key_value.weight"
+            self.key_value.bias.name_=f"layer_{layer_number}.attention.key_value.bias"
 
         coeff = None
         self.norm_factor = math.sqrt(self.hidden_size_per_attention_head)
@@ -184,6 +194,8 @@ class ParallelAttention(MegatronModule):
             input_is_parallel=True,
             init_method=output_layer_init_method,
             skip_bias_add=True)
+        self.dense.weight.name_=f"layer_{layer_number}.attention.dense.weight"
+        self.dense.bias.name_=f"layer_{layer_number}.attention.dense.bias"
 
     def forward(self, hidden_states, attention_mask, layer_past=None,
                 get_key_value=False, encoder_output=None):
@@ -405,6 +417,8 @@ class ParallelTransformerLayer(MegatronModule):
         self.input_layernorm = LayerNorm(
             args.hidden_size,
             eps=args.layernorm_epsilon)
+        self.input_layernorm.weight.name_=f"layer_{self.layer_number}.input_layernorm.weight"
+        self.input_layernorm.bias.name_=f"layer_{self.layer_number}.input_layernorm.bias"
 
         # Self attention.
         self.self_attention = ParallelAttention(
@@ -420,6 +434,8 @@ class ParallelTransformerLayer(MegatronModule):
         self.post_attention_layernorm = LayerNorm(
             args.hidden_size,
             eps=args.layernorm_epsilon)
+        self.post_attention_layernorm.weight.name_=f"layer_{self.layer_number}.post_attention_layernorm.weight"
+        self.post_attention_layernorm.bias.name_=f"layer_{self.layer_number}.post_attention_layernorm.bias"
 
         if self.layer_type == LayerType.decoder:
             self.inter_attention = ParallelAttention(
@@ -431,10 +447,12 @@ class ParallelTransformerLayer(MegatronModule):
             self.post_inter_attention_layernorm = LayerNorm(
                 args.hidden_size,
                 eps=args.layernorm_epsilon)
+            self.post_inter_attention_layernorm.weight.name_=f"layer_{self.layer_number}.post_inter_attention_layernorm.weight"
+            self.post_inter_attention_layernorm.bias.name_=f"layer_{self.layer_number}.post_inter_attention_layernorm.bias"
 
         # MLP
         self.mlp = ParallelMLP(init_method,
-                               output_layer_init_method)
+                               output_layer_init_method, layer_number=self.layer_number)
 
     def forward(self, hidden_states, attention_mask,
                 encoder_output=None, enc_dec_attn_mask=None,
@@ -590,6 +608,8 @@ class ParallelTransformer(MegatronModule):
             self.final_layernorm = LayerNorm(
                 args.hidden_size,
                 eps=args.layernorm_epsilon)
+            self.final_layernorm.weight.name_="output_layer.final_layernorm.weight"
+            self.final_layernorm.bias.name_="output_layer.final_layernorm.bias"
 
     def _get_layer(self, layer_number):
         return self.layers[layer_number]

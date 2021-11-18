@@ -103,13 +103,13 @@ class Pooler(MegatronModule):
             metrics["pooler_hidden"]=hidden_states.std()
         pooled = hidden_states[:, sequence_index, :]
         if args.iteration % args.log_interval == 0:
-            metrics["pooler_pooled"]=pooled.std()
+            metrics["pooler_pooled"]=pooled.float().pow(2).mean().pow(0.5)
         pooled = self.dense(pooled)
         if args.iteration % args.log_interval == 0:
-            metrics["pooler_dense"]=pooled.std()
+            metrics["pooler_dense"]=pooled.float().pow(2).mean().pow(0.5)
         pooled = torch.tanh(pooled)
         if args.iteration % args.log_interval == 0:
-            metrics["pooler_output"]=pooled.std()
+            metrics["pooler_output"]=pooled.float().pow(2).mean().pow(0.5)
             print({key:value.detach().cpu().item() for key, value in metrics.items()})
         return pooled
 
@@ -199,16 +199,16 @@ class Embedding(MegatronModule):
             metrics={}
         words_embeddings = self.word_embeddings(input_ids)
         if args.iteration % args.log_interval == 0:
-            metrics["words_embeddings"]=words_embeddings.std()
+            metrics["words_embeddings"]=words_embeddings.float().pow(2).mean().pow(0.5)
         position_embeddings = self.position_embeddings(position_ids)
         if args.iteration % args.log_interval == 0:
-            metrics["position_embeddings"]=position_embeddings.std()
+            metrics["position_embeddings"]=position_embeddings.float().pow(2).mean().pow(0.5)
         embeddings = words_embeddings + position_embeddings
         if tokentype_ids is not None:
             assert self.tokentype_embeddings is not None
             tokentype_embeddings=self.tokentype_embeddings(tokentype_ids)
             if args.iteration % args.log_interval == 0:
-                metrics["tokentype_embeddings"]=tokentype_embeddings.std()
+                metrics["tokentype_embeddings"]=tokentype_embeddings.float().pow(2).mean().pow(0.5)
             embeddings = embeddings + tokentype_embeddings
         else:
             assert self.tokentype_embeddings is None
@@ -377,7 +377,7 @@ class TransformerLanguageModel(MegatronModule):
         args=get_args()
         if args.iteration % args.log_interval == 0:
             metrics = {}
-            metrics["encoder_input"] = encoder_input.std()
+            metrics["encoder_input"] = encoder_input.float().pow(2).mean().pow(0.5)
         # encoder.
         if enc_hidden_states is None:
             encoder_output = self.encoder(encoder_input,
@@ -388,7 +388,7 @@ class TransformerLanguageModel(MegatronModule):
             encoder_output = enc_hidden_states.to(encoder_input.dtype)
 
         if args.iteration % args.log_interval == 0:
-            metrics["encoder_output"] = encoder_output.std()
+            metrics["encoder_output"] = encoder_output.float().pow(2).mean().pow(0.5)
             print({key:value.detach().cpu().item() for key, value in metrics.items()})
         if self.post_process:
             if self.add_pooler:

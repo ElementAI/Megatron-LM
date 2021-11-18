@@ -65,12 +65,12 @@ def clip_grad_norm_fp32(parameters, max_norm, norm_type=2):
             grads.append(grad)
         from megatron import get_args
         args=get_args()
-        if args.iteration==1:
-            print(grad.shape,
-                  grad_not_none and is_not_shared and is_not_tp_duplicate,
-                  torch.norm(grad, norm_type).detach().cpu().item(),
-                  grad.std().detach().cpu().item()
-                  )
+        #if args.iteration==1:
+        #    print(grad.shape,
+        #          grad_not_none and is_not_shared and is_not_tp_duplicate,
+        #          torch.norm(grad, norm_type).detach().cpu().item(),
+        #          grad.std().detach().cpu().item()
+        #          )
         if grad_not_none and is_not_shared and is_not_tp_duplicate:
             grads_for_norm.append(grad)
 

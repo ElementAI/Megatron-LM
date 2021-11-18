@@ -522,8 +522,8 @@ class FP32Optimizer(MegatronOptimizer):
                 for p in group['params']:
                     g=p.grad.detach().float()
                     print(
-                        p.detach().float().std().cpu().item(),
-                        g.std().cpu().item(),
+                        p.detach().float().pow(2).mean().pow(0.5).cpu().item(),
+                        g.detach().float().pow(2).mean().pow(0.5).cpu().item(),
                         torch.norm(g, 2).cpu().item(),
                         getattr(p, "name_", "unknown"),
                         p.shape

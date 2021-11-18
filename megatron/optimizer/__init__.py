@@ -43,6 +43,8 @@ def _get_params_for_weight_decay_optimization(modules):
                 no_weight_decay_params['params'].extend(
                     [p for n, p in list(module_._parameters.items())
                      if p is not None and n == 'bias'])
+    print("weight_decay_params", [getattr(p, "name_", "unknown") for p in weight_decay_params['params']])
+    print("no_weight_decay_params", [getattr(p, "name_", "unknown") for p in no_weight_decay_params['params']])
 
     return weight_decay_params, no_weight_decay_params
 
@@ -52,6 +54,7 @@ def get_megatron_optimizer(model):
 
     # Base optimizer.
     param_groups = _get_params_for_weight_decay_optimization(model)
+    print("weight_decay", args.weight_decay)
     if args.optimizer == 'adam':
         optimizer = Adam(param_groups,
                          lr=args.lr,

@@ -94,22 +94,22 @@ class BertLMHead(MegatronModule):
         args=get_args()
         if args.iteration % args.log_interval == 0:
             metrics={}
-            metrics["hidden_scale"]=hidden_states.std()
+            metrics["hidden_scale"]=hidden_states.float().pow(2).mean().pow(0.5)
         hidden_states = self.dense(hidden_states)
         if args.iteration % args.log_interval == 0:
-            metrics["dense_scale"]=hidden_states.std()
+            metrics["dense_scale"]=hidden_states.float().pow(2).mean().pow(0.5)
         hidden_states = self.gelu(hidden_states)
         if args.iteration % args.log_interval == 0:
-            metrics["gelu_scale"]=hidden_states.std()
+            metrics["gelu_scale"]=hidden_states.float().pow(2).mean().pow(0.5)
         hidden_states = self.layernorm(hidden_states)
         if args.iteration % args.log_interval == 0:
-            metrics["ln_scale"]=hidden_states.std()
+            metrics["ln_scale"]=hidden_states.float().pow(2).mean().pow(0.5)
         output = parallel_lm_logits(hidden_states,
                                     word_embeddings_weight,
                                     self.parallel_output,
                                     bias=self.bias)
         if args.iteration % args.log_interval == 0:
-            metrics["logits_scale"]=output.std()
+            metrics["logits_scale"]=output.float().pow(2).mean().pow(0.5)
             print({key:value.detach().cpu().item() for key, value in metrics.items()})
         return output
 
@@ -128,10 +128,10 @@ def post_language_model_processing(lm_output, pooled_output,
         args=get_args()
         if args.iteration % args.log_interval == 0:
             metrics={}
-            metrics["pooled_output"]=pooled_output.std()
+            metrics["pooled_output"]=pooled_output.float().pow(2).mean().pow(0.5)
         binary_logits = binary_head(pooled_output)
         if args.iteration % args.log_interval == 0:
-            metrics["binary_logits"]=binary_logits.std()
+            metrics["binary_logits"]=binary_logits.float().pow(2).mean().pow(0.5)
             print({key:value.detach().cpu().item() for key, value in metrics.items()})
 
     if lm_labels is None:

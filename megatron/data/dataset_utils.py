@@ -22,6 +22,7 @@ import math
 import os
 import time
 import collections
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -650,7 +651,8 @@ def get_samples_mapping(indexed_dataset,
         max_num_samples = np.iinfo(np.int64).max - 1
 
     # Filename of the index mapping
-    indexmap_filename = data_prefix
+    data_prefix_file_name = Path(data_prefix).name
+    indexmap_filename = data_prefix_file_name
     indexmap_filename += '_{}_indexmap'.format(name)
     if num_epochs != (np.iinfo(np.int32).max - 1):
         indexmap_filename += '_{}ep'.format(num_epochs)
@@ -661,11 +663,13 @@ def get_samples_mapping(indexed_dataset,
     indexmap_filename += '_{}s'.format(seed)
     indexmap_filename += '.npy'
 
+    indexmap_file_path = str(Path(get_args().save).joinpath(indexmap_filename).absolute())
+
     # Build the indexed mapping if not exist.
     if torch.distributed.get_rank() == 0 and \
-       not os.path.isfile(indexmap_filename):
+       not os.path.isfile(indexmap_file_path):
         print(' > WARNING: could not find index map file {}, building '
-              'the indices on rank 0 ...'.format(indexmap_filename))
+              'the indices on rank 0 ...'.format(indexmap_file_path))
 
         # Make sure the types match the helpers input types.
         assert indexed_dataset.doc_idx.dtype == np.int64
@@ -689,9 +693,10 @@ def get_samples_mapping(indexed_dataset,
             verbose,
             2 if binary_head else 1)
         print_rank_0(' > done building sapmles index maping')
-        np.save(indexmap_filename, samples_mapping, allow_pickle=True)
+
+        np.save(indexmap_file_path, samples_mapping, allow_pickle=True)
         print_rank_0(' > saved the index mapping in {}'.format(
-            indexmap_filename))
+            indexmap_file_path))
         # Make sure all the ranks have built the mapping
         print_rank_0(' > elasped time to build and save samples mapping '
                      '(seconds): {:4f}'.format(
@@ -708,9 +713,9 @@ def get_samples_mapping(indexed_dataset,
 
     # Load indexed dataset.
     print_rank_0(' > loading indexed mapping from {}'.format(
-        indexmap_filename))
+        indexmap_file_path))
     start_time = time.time()
-    samples_mapping = np.load(indexmap_filename, allow_pickle=True, mmap_mode='r')
+    samples_mapping = np.load(indexmap_file_path, allow_pickle=True, mmap_mode='r')
     print_rank_0('    loaded indexed file in {:3.3f} seconds'.format(
         time.time() - start_time))
     print_rank_0('    total number of samples: {}'.format(

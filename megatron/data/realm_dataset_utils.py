@@ -125,8 +125,7 @@ def get_block_samples_mapping(block_dataset, title_dataset, data_prefix, num_epo
         max_num_samples = np.iinfo(np.int64).max - 1
 
     # Filename of the index mapping
-    data_prefix_file_name = Path(data_prefix).name
-    indexmap_filename = data_prefix_file_name
+    indexmap_filename = Path(data_prefix).name
     indexmap_filename += '_{}_indexmap'.format(name)
     if num_epochs != (np.iinfo(np.int32).max - 1):
         indexmap_filename += '_{}ep'.format(num_epochs)
@@ -138,13 +137,13 @@ def get_block_samples_mapping(block_dataset, title_dataset, data_prefix, num_epo
         indexmap_filename += '_1sentok'
     indexmap_filename += '.npy'
 
-    indexmap_file_path = str(Path(get_args().save).joinpath(indexmap_filename).absolute())
+    indexmap_filename = Path(get_args().save).joinpath(indexmap_filename).resolve()
 
     # Build the indexed mapping if not exist.
     if mpu.get_data_parallel_rank() == 0 and \
-            not os.path.isfile(indexmap_file_path):
+            not os.path.isfile(indexmap_filename):
         print(' > WARNING: could not find index map file {}, building '
-              'the indices on rank 0 ...'.format(indexmap_file_path))
+              'the indices on rank 0 ...'.format(indexmap_filename))
 
         # Make sure the types match the helpers input types.
         assert block_dataset.doc_idx.dtype == np.int64
@@ -170,9 +169,9 @@ def get_block_samples_mapping(block_dataset, title_dataset, data_prefix, num_epo
 
 
         print_rank_0(' > done building samples index mapping')
-        np.save(indexmap_file_path, mapping_array, allow_pickle=True)
+        np.save(indexmap_filename, mapping_array, allow_pickle=True)
         print_rank_0(' > saved the index mapping in {}'.format(
-            indexmap_file_path))
+            indexmap_filename))
         # Make sure all the ranks have built the mapping
         print_rank_0(' > elapsed time to build and save samples mapping '
                      '(seconds): {:4f}'.format(
@@ -188,10 +187,10 @@ def get_block_samples_mapping(block_dataset, title_dataset, data_prefix, num_epo
 
     # Load indexed dataset.
     print_rank_0(' > loading indexed mapping from {}'.format(
-        indexmap_file_path))
+        indexmap_filename))
     start_time = time.time()
 
-    mapping_array = np.load(indexmap_file_path, allow_pickle=True, mmap_mode='r')
+    mapping_array = np.load(indexmap_filename, allow_pickle=True, mmap_mode='r')
     samples_mapping = BlockSamplesMapping(mapping_array)
 
     print_rank_0('    loaded indexed file in {:3.3f} seconds'.format(

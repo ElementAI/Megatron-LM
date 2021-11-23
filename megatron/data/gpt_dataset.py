@@ -17,6 +17,7 @@
 
 import os
 import time
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -202,7 +203,7 @@ def _build_index_mappings(name, data_prefix, documents, sizes,
     np_rng = np.random.RandomState(seed=seed)
 
     # Filename of the index mappings.
-    _filename = data_prefix
+    _filename = Path(data_prefix).name
     _filename += '_{}_indexmap'.format(name)
     _filename += '_{}ns'.format(num_samples)
     _filename += '_{}sl'.format(seq_length)
@@ -210,6 +211,11 @@ def _build_index_mappings(name, data_prefix, documents, sizes,
     doc_idx_filename = _filename + '_doc_idx.npy'
     sample_idx_filename = _filename + '_sample_idx.npy'
     shuffle_idx_filename = _filename + '_shuffle_idx.npy'
+
+    output_folder = Path(get_args().save)
+    doc_idx_filename = output_folder.joinpath(doc_idx_filename).resolve()
+    sample_idx_filename =  output_folder.joinpath(sample_idx_filename).resolve()
+    shuffle_idx_filename = output_folder.joinpath(shuffle_idx_filename).resolve()
 
     # Build the indexed mapping if not exist.
     if torch.distributed.get_rank() == 0:

@@ -1,5 +1,6 @@
 import os
 import time
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -134,7 +135,7 @@ def get_block_samples_mapping(block_dataset, title_dataset, data_prefix, num_epo
         max_num_samples = np.iinfo(np.int64).max - 1
 
     # Filename of the index mapping
-    indexmap_filename = data_prefix
+    indexmap_filename = Path(data_prefix).name 
     indexmap_filename += '_{}_indexmap'.format(name)
     if num_epochs != (np.iinfo(np.int32).max - 1):
         indexmap_filename += '_{}ep'.format(num_epochs)
@@ -145,6 +146,8 @@ def get_block_samples_mapping(block_dataset, title_dataset, data_prefix, num_epo
     if use_one_sent_docs:
         indexmap_filename += '_1sentok'
     indexmap_filename += '.npy'
+
+    indexmap_filename = Path(get_args().save).joinpath(indexmap_filename).resolve()
 
     # Build the indexed mapping if not exist.
     if mpu.get_data_parallel_rank() == 0 and \

@@ -18,6 +18,7 @@
 import math
 
 import torch
+from megatron import record_scale
 
 from megatron import get_args
 
@@ -44,12 +45,26 @@ def attention_mask_func(attention_scores, attention_mask):
     return attention_scores
 
 
-def get_linear_layer(rows, columns, init_method):
+def get_linear_layer(rows, columns, init_method, name_=""):
     """Simple linear layer with weight initialization."""
     layer = torch.nn.Linear(rows, columns)
     init_method(layer.weight)
     with torch.no_grad():
         layer.bias.zero_()
+    layer.name_=name_
+    layer.weight.name_=f"{name_}.weight"
+    layer.bias.name_=f"{name_}.bias"
+
+
+    old_forward=layer.forward
+
+    def forward(self,input):
+        output=old_forward(input)
+        record_scale(self.name_,output)
+        return output
+
+    layer.forward=forward
+
     return layer
 
 @torch.jit.script

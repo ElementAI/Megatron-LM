@@ -23,6 +23,8 @@ from torch.nn.parameter import Parameter
 from torch.nn import init
 import importlib
 
+from megatron import record_scale
+
 global fused_mix_prec_layer_norm_cuda
 fused_mix_prec_layer_norm_cuda = None
 
@@ -61,8 +63,9 @@ class FusedLayerNormAffineFunction(torch.autograd.Function):
 
 class MixedFusedLayerNorm(torch.nn.Module):
 
-  def __init__(self, normalized_shape, eps=1e-5):
+  def __init__(self, normalized_shape, eps=1e-5, name_=""):
         super(MixedFusedLayerNorm, self).__init__()
+        self.name_=name_
 
         global fused_mix_prec_layer_norm_cuda
         fused_mix_prec_layer_norm_cuda = importlib.import_module(
@@ -73,7 +76,9 @@ class MixedFusedLayerNorm(torch.nn.Module):
         self.normalized_shape = torch.Size(normalized_shape)
         self.eps = eps
         self.weight = Parameter(torch.Tensor(*normalized_shape))
+        self.weight.name_=f"{self.name_}.weight"
         self.bias = Parameter(torch.Tensor(*normalized_shape))
+        self.bias.name_=f"{self.name_}.bias"
         self.reset_parameters()
 
 
@@ -85,6 +90,8 @@ class MixedFusedLayerNorm(torch.nn.Module):
 
   def forward(self, input):
 
-    return FusedLayerNormAffineFunction.apply(
+    output = FusedLayerNormAffineFunction.apply(
       input, self.weight, self.bias, self.normalized_shape,self.eps)
+    record_scale(self.name_, output)
+    return output
 

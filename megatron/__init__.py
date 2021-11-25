@@ -78,5 +78,29 @@ def get_log_scales():
     return args.log_scales and args.iteration % args.log_interval == 0
 
 
-def log_metrics(metrics):
-    logger.info(str({key:value.cpu().item() for key, value in metrics.items()}))
+def log_metrics():
+    metrics = {}
+    for key, value in _metrics.items():
+        metrics_ = metrics
+        keys = key.split(".")
+        for prefix in keys[:-1]:
+            if prefix not in metrics_:
+                metrics_[prefix] = {}
+            metrics_ = metrics_[prefix]
+        metrics_[keys[-1]] = value
+    return metrics
+
+def _log_dicts(self, metrics, indent=0):
+    for key, value in metrics.items():
+        key_ = key.rjust(len(key) + indent)
+        # Merge keys when there is only one entry.
+        while isinstance(value, dict) and len(value) == 1:
+            for value_key, value_ in value.items():
+                key_ = ".".join([key_, value_key])
+                value = value_
+        if isinstance(value, dict):
+            logger.info(key_ + ":")
+            self._log_dicts(value, indent + 2)
+        else:
+            sep = self._config.logging_width - len(value) - len(key_) - 2
+            logger.info(f"{key_.ljust(len(key_)+sep,'.')}  {value}")

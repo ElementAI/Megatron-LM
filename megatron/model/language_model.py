@@ -48,7 +48,7 @@ def get_language_model(num_tokentypes, add_pooler,
                        encoder_attn_mask_type, init_method=None,
                        scaled_init_method=None, add_decoder=False,
                        decoder_attn_mask_type=AttnMaskType.causal,
-                       pre_process=True, post_process=True):
+                       pre_process=True, post_process=True, name_=""):
     """Build language model and return along with the key to save."""
     args = get_args()
 
@@ -69,7 +69,8 @@ def get_language_model(num_tokentypes, add_pooler,
         decoder_attn_mask_type=decoder_attn_mask_type,
         add_pooler=add_pooler,
         pre_process=pre_process,
-        post_process=post_process
+        post_process=post_process,
+        name_=name_
     )
     # key used for checkpoints.
     language_model_key = 'language_model'
@@ -320,7 +321,8 @@ class TransformerLanguageModel(MegatronModule):
                                        args.max_position_embeddings,
                                        args.hidden_dropout,
                                        self.init_method,
-                                       self.num_tokentypes)
+                                       self.num_tokentypes,
+                                       name_=f"{self.name_}.input_layer")
             self._embedding_key = 'embedding'
 
         # Transformer.

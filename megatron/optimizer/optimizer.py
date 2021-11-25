@@ -142,8 +142,8 @@ class MegatronOptimizer(ABC):
             for group in self.optimizer.param_groups:
                 for p in group['params']:
                     name_=getattr(p, "name_", "unknown")
-                    record_scale(name_, p, False)
-                    record_scale(f"{name_}_grad", p.grad, False)
+                    record_scale(f"optimizer.{name_}", p, False)
+                    record_scale(f"optimizer.{name_}_grad", p.grad, False)
 
     # Promote state so it can be retrieved or set via
     # "optimizer_instance.state"
@@ -253,6 +253,8 @@ class Float16OptimizerWithFloat16Params(MegatronOptimizer):
                         float16_params_this_group.append(param)
                         # Create a copy
                         main_param = param.detach().clone().float()
+                        if hasattr(param, "name_"):
+                            main_param.name_=param.name_
                         # Copy tensor model parallel attributes.
                         mpu.copy_tensor_model_parallel_attributes(main_param,
                                                                   param)

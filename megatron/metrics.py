@@ -1,4 +1,5 @@
 import logging
+import math
 
 import torch
 from megatron.global_vars import get_args
@@ -29,7 +30,7 @@ def get_scale(x):
 
 def get_log_scales():
     args=get_args()
-    return args.log_scales and args.iteration % args.log_interval == 0
+    return args.log_scales and (_iteration+1) % args.log_interval == 0
 
 
 def log_metrics():
@@ -41,13 +42,14 @@ def log_metrics():
             if prefix not in metrics_:
                 metrics_[prefix] = {}
             metrics_ = metrics_[prefix]
-        metrics_[keys[-1]] = value
+        metrics_[keys[-1]] = _format_value(value)
     _log_dicts(metrics)
 
 
 def _log_dicts(metrics, indent=0):
     for key, value in metrics.items():
         key_ = key.rjust(len(key) + indent)
+
         # Merge keys when there is only one entry.
         while isinstance(value, dict) and len(value) == 1:
             for value_key, value_ in value.items():
@@ -59,3 +61,13 @@ def _log_dicts(metrics, indent=0):
         else:
             sep = _LOGGING_WIDTH - len(value) - len(key_) - 2
             logger.info(f"{key_.ljust(len(key_)+sep,'.')}  {value}")
+
+
+def _format_value(value, precision=5,max_leading_zeros=3):
+    decimals = 0 if value == 0 or not math.isfinite(value) else precision - math.floor(math.log10(abs(value)))
+
+    if 0 <= decimals <= precision + max_leading_zeros:
+        value = f"{value:.{decimals}f}"
+    else:
+        value = f"{value:.{precision}e}"
+    return value

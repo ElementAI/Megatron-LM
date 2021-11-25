@@ -620,6 +620,7 @@ def train(forward_step_func, model, optimizer, lr_scheduler,
     print_datetime('before the start of training step')
     report_memory_flag = True
     while iteration < args.train_iters:
+        next_iteration(iteration)
         update_num_microbatches(args.consumed_train_samples)
         loss_dict, skipped_iter, grad_norm, num_zeros_in_grad = \
             train_step(forward_step_func,
@@ -628,7 +629,6 @@ def train(forward_step_func, model, optimizer, lr_scheduler,
                        optimizer,
                        lr_scheduler)
         iteration += 1
-        next_iteration(iteration)
         args.consumed_train_samples += mpu.get_data_parallel_world_size() * \
                                        args.micro_batch_size * \
                                        get_num_microbatches()

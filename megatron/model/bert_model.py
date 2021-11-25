@@ -72,7 +72,7 @@ class BertLMHead(MegatronModule):
                  layernorm_epsilon, parallel_output, name_=""):
 
         super(BertLMHead, self).__init__()
-        self.name_="output_layer.lm_head"
+        self.name_=name_
 
         args = get_args()
 
@@ -159,13 +159,15 @@ class BertModel(MegatronModule):
             init_method=init_method,
             scaled_init_method=scaled_init_method,
             pre_process=self.pre_process,
-            post_process=self.post_process)
+            post_process=self.post_process,
+            name_=self.name_)
 
         self.initialize_word_embeddings(init_method_normal)
         if self.post_process:
             self.lm_head = BertLMHead(
                 self.word_embeddings_weight().size(0),
-                args.hidden_size, init_method, args.layernorm_epsilon, parallel_output)
+                args.hidden_size, init_method, args.layernorm_epsilon, parallel_output,
+                name_=f"{self.name_}.output_layer.lm_head")
             self._lm_head_key = 'lm_head'
             self.binary_head = None
             if self.add_binary_head:
@@ -173,6 +175,8 @@ class BertModel(MegatronModule):
                                                     init_method, name_=f"{self.name_}.output_layer.sop_head.binary_head")
                 self._binary_head_key = 'binary_head'
 
+        for p in self.parameters():
+            print(getattr(p, "name_", "unknown"), p.shape)
     def set_input_tensor(self, input_tensor):
         """See megatron.model.transformer.set_input_tensor()"""
         self.language_model.set_input_tensor(input_tensor)

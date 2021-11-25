@@ -149,7 +149,7 @@ class ParallelAttention(MegatronModule):
                 3 * projection_size,
                 gather_output=False,
                 init_method=init_method,
-                name_=f"layer_{self.name_}.query_key_value")
+                name_=f"{self.name_}.query_key_value")
         else:
             assert attention_type == AttnType.cross_attn
             self.query = mpu.ColumnParallelLinear(
@@ -157,14 +157,14 @@ class ParallelAttention(MegatronModule):
                 projection_size,
                 gather_output=False,
                 init_method=init_method,
-                name_=f"layer_{self.name_}.query")
+                name_=f"{self.name_}.query")
 
             self.key_value = mpu.ColumnParallelLinear(
                 args.hidden_size,
                 2 * projection_size,
                 gather_output=False,
                 init_method=init_method,
-                name_=f"layer_{self.name_}.key_value")
+                name_=f"{self.name_}.key_value")
 
         coeff = None
         self.norm_factor = math.sqrt(self.hidden_size_per_attention_head)
@@ -192,7 +192,7 @@ class ParallelAttention(MegatronModule):
             input_is_parallel=True,
             init_method=output_layer_init_method,
             skip_bias_add=True,
-            name_=f"layer_{self.name_}.dense")
+            name_=f"{self.name_}.dense")
 
     def forward(self, hidden_states, attention_mask, layer_past=None,
                 get_key_value=False, encoder_output=None):
@@ -581,7 +581,7 @@ class ParallelTransformer(MegatronModule):
                 layer_number,
                 layer_type=layer_type,
                 self_attn_mask_type=self_attn_mask_type,
-                name_=f"{self.name_}.layer_{layer_number}")
+                name_=f"{self.name_}.layer_{layer_number-1}")
         if args.virtual_pipeline_model_parallel_size is not None:
             assert args.num_layers % args.virtual_pipeline_model_parallel_size == 0, \
                 'num_layers_per_stage must be divisible by ' \

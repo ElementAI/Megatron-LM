@@ -25,7 +25,8 @@ import amp_C
 
 from megatron import get_timers
 from megatron import mpu
-from megatron import print_rank_0,record_scale,get_log_scales
+from megatron import print_rank_0
+from megatron.metrics import record_scale,get_log_scales
 
 from .clip_grads import clip_grad_norm_fp32, count_zeros_fp32
 

@@ -25,7 +25,7 @@ _TRAIN_START_TIME = time.time()
 import torch
 from torch.nn.parallel.distributed import DistributedDataParallel as torchDDP
 
-from megatron import get_args, get_log_scales, next_iteration, log_metrics
+from megatron.metrics import get_args, get_log_scales, next_iteration, log_metrics
 from megatron import get_timers
 from megatron import get_tensorboard_writer
 from megatron import get_current_global_batch_size

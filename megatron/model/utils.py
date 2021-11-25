@@ -56,9 +56,9 @@ def get_linear_layer(rows, columns, init_method, name_=""):
 
     old_forward=layer.forward
 
-    def forward(self,input):
+    def forward(input):
         output=old_forward(input)
-        record_scale(self.name_,output)
+        record_scale(layer.name_,output)
         return output
 
     layer.forward=forward

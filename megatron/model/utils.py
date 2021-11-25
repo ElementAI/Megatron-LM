@@ -18,9 +18,7 @@
 import math
 
 import torch
-from megatron import record_scale
-
-from megatron import get_args
+from megatron.metrics import record_scale
 
 def init_method_normal(sigma):
     """Init method based on N(0, sigma)."""

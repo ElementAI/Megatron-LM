@@ -18,8 +18,9 @@
 import logging
 import torch
 
-from megatron import get_args, record_scale
+from megatron import get_args
 from megatron import mpu
+from megatron.metrics import record_scale
 from megatron.model.enums import AttnMaskType
 from megatron.model.language_model import parallel_lm_logits
 from megatron.model.language_model import get_language_model

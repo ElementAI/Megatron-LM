@@ -23,7 +23,7 @@ from torch.nn.parameter import Parameter
 from torch.nn import init
 import importlib
 
-from megatron import record_scale
+from megatron.metrics import record_scale
 
 global fused_mix_prec_layer_norm_cuda
 fused_mix_prec_layer_norm_cuda = None

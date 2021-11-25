@@ -18,9 +18,10 @@
 import torch
 import torch.nn.functional as F
 
-from megatron import get_args,record_scale
+from megatron import get_args
 from megatron import mpu
 from .module import MegatronModule
+from megatron.metrics import record_scale
 from megatron.model.enums import LayerType, AttnMaskType
 from megatron.model.transformer import ParallelTransformer
 from megatron.model.utils import get_linear_layer

@@ -7,6 +7,7 @@ logger = logging.getLogger(__name__)
 
 _iteration=0
 _metrics={}
+_LOGGING_WIDTH=50
 
 def next_iteration(iteration:int):
     global _iteration, _metrics
@@ -41,9 +42,10 @@ def log_metrics():
                 metrics_[prefix] = {}
             metrics_ = metrics_[prefix]
         metrics_[keys[-1]] = value
-    return metrics
+    _log_dicts(metrics)
 
-def _log_dicts(self, metrics, indent=0):
+
+def _log_dicts(metrics, indent=0):
     for key, value in metrics.items():
         key_ = key.rjust(len(key) + indent)
         # Merge keys when there is only one entry.
@@ -53,7 +55,7 @@ def _log_dicts(self, metrics, indent=0):
                 value = value_
         if isinstance(value, dict):
             logger.info(key_ + ":")
-            self._log_dicts(value, indent + 2)
+            _log_dicts(value, indent + 2)
         else:
-            sep = self._config.logging_width - len(value) - len(key_) - 2
+            sep = _LOGGING_WIDTH - len(value) - len(key_) - 2
             logger.info(f"{key_.ljust(len(key_)+sep,'.')}  {value}")

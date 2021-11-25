@@ -19,6 +19,7 @@ import argparse
 import os
 
 import torch
+from megatron import print_rank_0
 
 def parse_args(extra_args_provider=None, defaults={},
                ignore_unknown_args=False):
@@ -73,13 +74,12 @@ def parse_args(extra_args_provider=None, defaults={},
         'size ({})'.format(args.world_size, args.tensor_model_parallel_size,
                            args.pipeline_model_parallel_size)
     args.data_parallel_size = args.world_size // model_parallel_size
-    if args.rank == 0:
-        print('using world size: {}, data-parallel-size: {}, '
-              'tensor-model-parallel size: {}, '
-              'pipeline-model-parallel size: {} '.format(
-                  args.world_size, args.data_parallel_size,
-                  args.tensor_model_parallel_size,
-                  args.pipeline_model_parallel_size), flush=True)
+    print_rank_0('using world size: {}, data-parallel-size: {}, '
+          'tensor-model-parallel size: {}, '
+          'pipeline-model-parallel size: {} '.format(
+              args.world_size, args.data_parallel_size,
+              args.tensor_model_parallel_size,
+              args.pipeline_model_parallel_size))
 
     # Deprecated arguments
     assert args.batch_size is None, '--batch-size argument is no longer ' \
@@ -98,11 +98,9 @@ def parse_args(extra_args_provider=None, defaults={},
         # arguments that are passed to the program. We check this by
         # ensuring the arg is set to None.
         if getattr(args, key) is not None:
-            if args.rank == 0:
-                print('WARNING: overriding default arguments for {key}:{v} \
-                       with {key}:{v2}'.format(key=key, v=defaults[key],
-                                               v2=getattr(args, key)),
-                                               flush=True)
+            print_rank_0('WARNING: overriding default arguments for {key}:{v} \
+                   with {key}:{v2}'.format(key=key, v=defaults[key],
+                                           v2=getattr(args, key)))
         else:
             setattr(args, key, defaults[key])
 
@@ -111,9 +109,8 @@ def parse_args(extra_args_provider=None, defaults={},
     assert args.micro_batch_size > 0
     if args.global_batch_size is None:
         args.global_batch_size = args.micro_batch_size * args.data_parallel_size
-        if args.rank == 0:
-            print('setting global batch size to {}'.format(
-                args.global_batch_size), flush=True)
+        print_rank_0('setting global batch size to {}'.format(
+            args.global_batch_size))
     assert args.global_batch_size > 0
     if args.num_layers_per_virtual_pipeline_stage is not None:
         assert args.pipeline_model_parallel_size > 2, \
@@ -140,13 +137,10 @@ def parse_args(extra_args_provider=None, defaults={},
         # be done in fp32.
         if not args.accumulate_allreduce_grads_in_fp32:
             args.accumulate_allreduce_grads_in_fp32 = True
-            if args.rank == 0:
-                print('accumulate and all-reduce gradients in fp32 for '
-                      'bfloat16 data type.', flush=True)
+            print_rank_0('accumulate and all-reduce gradients in fp32 for '
+                  'bfloat16 data type.')
 
-    if args.rank == 0:
-        print('using {} for parameters ...'.format(args.params_dtype),
-              flush=True)
+    print_rank_0('using {} for parameters ...'.format(args.params_dtype))
 
     # If we do accumulation and all-reduces in fp32, we need to have
     # local DDP and we should set the use-contiguous-buffers-in-ddp.
@@ -239,17 +233,16 @@ def parse_args(extra_args_provider=None, defaults={},
 
 def _print_args(args):
     """Print arguments."""
-    if args.rank == 0:
-        print('------------------------ arguments ------------------------',
-              flush=True)
-        str_list = []
-        for arg in vars(args):
-            dots = '.' * (48 - len(arg))
-            str_list.append('  {} {} {}'.format(arg, dots, getattr(args, arg)))
-        for arg in sorted(str_list, key=lambda x: x.lower()):
-            print(arg, flush=True)
-        print('-------------------- end of arguments ---------------------',
-              flush=True)
+    print_rank_0('------------------------ arguments ------------------------',
+          flush=True)
+    str_list = []
+    for arg in vars(args):
+        dots = '.' * (48 - len(arg))
+        str_list.append('  {} {} {}'.format(arg, dots, getattr(args, arg)))
+    for arg in sorted(str_list, key=lambda x: x.lower()):
+        print_rank_0(arg, flush=True)
+    print_rank_0('-------------------- end of arguments ---------------------',
+          flush=True)
 
 
 def _check_arg_is_not_none(args, arg):

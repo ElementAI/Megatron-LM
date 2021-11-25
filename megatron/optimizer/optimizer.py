@@ -25,7 +25,7 @@ import amp_C
 
 from megatron import get_timers
 from megatron import mpu
-from megatron import print_rank_0
+from megatron import print_rank_0,record_scale,get_log_scales
 
 from .clip_grads import clip_grad_norm_fp32, count_zeros_fp32
 
@@ -136,6 +136,13 @@ class MegatronOptimizer(ABC):
     def load_state_dict(self, state_dict):
         pass
 
+    def _record_scales(self):
+        if get_log_scales():
+            for group in self.optimizer.param_groups:
+                for p in group['params']:
+                    name_=getattr(p, "name_", "unknown")
+                    record_scale(name_, p, False)
+                    record_scale(f"{name_}_grad", p.grad, False)
 
     # Promote state so it can be retrieved or set via
     # "optimizer_instance.state"
@@ -406,17 +413,7 @@ class Float16OptimizerWithFloat16Params(MegatronOptimizer):
         num_zeros_in_grad = self.count_zeros() if \
                             self.log_num_zeros_in_grad else None
 
-        from megatron import get_args
-        args=get_args()
-        if args.iteration==1:
-            for group in self.optimizer.param_groups:
-                for p in group['params']:
-                    print(
-                        p.detach().float().std().cpu().item(),
-                        p.grad.detach().float().std().cpu().item(),
-                        getattr(p, "name_", "unknown"),
-                        p.shape
-                    )
+        self._record_scales()
         # Step the optimizer.
         self.optimizer.step()
 
@@ -515,19 +512,7 @@ class FP32Optimizer(MegatronOptimizer):
         num_zeros_in_grad = self.count_zeros() if \
                             self.log_num_zeros_in_grad else None
 
-        from megatron import get_args
-        args=get_args()
-        if args.iteration % args.log_interval == 0:
-            for group in self.optimizer.param_groups:
-                for p in group['params']:
-                    g=p.grad.detach().float()
-                    print(
-                        p.detach().float().pow(2).mean().pow(0.5).cpu().item(),
-                        g.detach().float().pow(2).mean().pow(0.5).cpu().item(),
-                        torch.norm(g, 2).cpu().item(),
-                        getattr(p, "name_", "unknown"),
-                        p.shape
-                    )
+        self._record_scales()
         # Update parameters.
         self.optimizer.step()
 

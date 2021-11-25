@@ -60,10 +60,6 @@ def next_iteration(iteration:int):
     _metrics={}
     _iteration=iteration
 
-def record_metrics(metrics:typing.Dict[str, float]):
-    global _metrics
-    _metrics.update(metrics)
-
 
 def record_scale(name:str,x:torch.Tensor,grad=True):
     global _metrics
@@ -74,11 +70,13 @@ def record_scale(name:str,x:torch.Tensor,grad=True):
 
 
 def get_scale(x):
-    return x.float().pow(2).mean().pow(0.5)
+    return x.detach().float().pow(2).mean().pow(0.5)
+
 
 def get_log_scales():
     args=get_args()
     return args.log_scales and args.iteration % args.log_interval == 0
 
+
 def log_metrics(metrics):
-    logger.info(str({key:value.detach().cpu().item() for key, value in metrics.items()}))
+    logger.info(str({key:value.cpu().item() for key, value in metrics.items()}))

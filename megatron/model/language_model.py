@@ -90,18 +90,16 @@ class Pooler(MegatronModule):
 
     def __init__(self, hidden_size, init_method, name_=""):
         super(Pooler, self).__init__()
-        self.name_="output_layer.sop_head"
+        self.name_=name_
         self.dense = get_linear_layer(hidden_size, hidden_size, init_method, name_=f"{self.name_}.dense")
 
     def forward(self, hidden_states, sequence_index=0):
         # hidden_states: [b, s, h]
         # sequence_index: index of the token to pool.
-        args=get_args()
         record_scale(f"{self.name_}.input",hidden_states)
         pooled = hidden_states[:, sequence_index, :]
         record_scale(f"{self.name_}.pooled",pooled)
         pooled = self.dense(pooled)
-        record_scale(f"{self.dense.name_}.pooled",pooled)
         pooled = torch.tanh(pooled)
         record_scale(f"{self.name_}.tanh",pooled)
         return pooled
@@ -127,7 +125,8 @@ class Embedding(MegatronModule):
                  max_sequence_length,
                  embedding_dropout_prob,
                  init_method,
-                 num_tokentypes=0):
+                 num_tokentypes=0,
+                 name_=""):
         super(Embedding, self).__init__()
 
         self.hidden_size = hidden_size
@@ -135,7 +134,7 @@ class Embedding(MegatronModule):
         self.num_tokentypes = num_tokentypes
 
         args = get_args()
-        self.name_="input_layer"
+        self.name_=name_
 
         # Word embeddings (parallel).
         self.word_embeddings = mpu.VocabParallelEmbedding(
@@ -329,7 +328,8 @@ class TransformerLanguageModel(MegatronModule):
             output_layer_init_method,
             self_attn_mask_type=self.encoder_attn_mask_type,
             pre_process=self.pre_process,
-            post_process=self.post_process
+            post_process=self.post_process,
+            name_=self.name_,
         )
         self._encoder_key = 'encoder'
 
@@ -341,7 +341,8 @@ class TransformerLanguageModel(MegatronModule):
                 self.init_method,
                 output_layer_init_method,
                 layer_type=LayerType.decoder,
-                self_attn_mask_type=self.decoder_attn_mask_type)
+                self_attn_mask_type=self.decoder_attn_mask_type,
+                name_=f"{self.name_}.decoder")
             self._decoder_key = 'decoder'
 
         if self.post_process:
@@ -368,7 +369,6 @@ class TransformerLanguageModel(MegatronModule):
         else:
             encoder_input = None
 
-        args=get_args()
         # encoder.
         if enc_hidden_states is None:
             encoder_output = self.encoder(encoder_input,

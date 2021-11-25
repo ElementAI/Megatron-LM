@@ -43,8 +43,6 @@ def _get_params_for_weight_decay_optimization(modules):
                 no_weight_decay_params['params'].extend(
                     [p for n, p in list(module_._parameters.items())
                      if p is not None and n == 'bias'])
-    print("weight_decay_params", [getattr(p, "name_", "unknown") for p in weight_decay_params['params']])
-    print("no_weight_decay_params", [getattr(p, "name_", "unknown") for p in no_weight_decay_params['params']])
 
     return weight_decay_params, no_weight_decay_params
 

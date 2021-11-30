@@ -13,8 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from apex.optimizers import FusedAdam as Adam
-from apex.optimizers import FusedSGD as SGD
+import warnings
+
+try:
+    from apex.optimizers import FusedAdam as Adam
+    from apex.optimizers import FusedSGD as SGD
+except ImportError:
+    warnings.warn("Apex not found")
 
 from megatron import get_args
 from megatron.model import LayerNorm
@@ -43,11 +48,7 @@ def _get_params_for_weight_decay_optimization(modules):
                 no_weight_decay_params['params'].extend(
                     [p for n, p in list(module_._parameters.items())
                      if p is not None and n == 'bias'])
-    for p in weight_decay_params['params']:
-        print("weight_decay_params",getattr(p, "name_", "unknown"), p.shape)
 
-    for p in no_weight_decay_params['params']:
-        print("no_weight_decay_params",getattr(p, "name_", "unknown"), p.shape)
     return weight_decay_params, no_weight_decay_params
 
 

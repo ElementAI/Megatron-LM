@@ -77,12 +77,12 @@ class BertLMHead(MegatronModule):
         args = get_args()
 
         self.bias = torch.nn.Parameter(torch.zeros(mpu_vocab_size))
-        self.bias.name_=f"{self.name_}.logits.bias"
+        self.bias.name_=f"{self.name_}.logits.linear_bias"
         mpu.set_tensor_model_parallel_attributes(self.bias, True, 0, 1)
         self.parallel_output = parallel_output
 
         self.dense = get_linear_layer(hidden_size, hidden_size, init_method, name_=f"{self.name_}.dense")
-        self.layernorm = LayerNorm(hidden_size, eps=layernorm_epsilon, name_=f"{self.name_}.layernorm")
+        self.layernorm = LayerNorm(hidden_size, eps=layernorm_epsilon, name_=f"{self.name_}.layer_norm")
         self.gelu = torch.nn.functional.gelu
         if args.openai_gelu:
             self.gelu = openai_gelu
@@ -175,8 +175,6 @@ class BertModel(MegatronModule):
                                                     init_method, name_=f"{self.name_}.output_layer.sop_head.binary_head")
                 self._binary_head_key = 'binary_head'
 
-        for p in self.parameters():
-            print(getattr(p, "name_", "unknown"), p.shape)
     def set_input_tensor(self, input_tensor):
         """See megatron.model.transformer.set_input_tensor()"""
         self.language_model.set_input_tensor(input_tensor)

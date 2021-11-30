@@ -257,7 +257,7 @@ class ColumnParallelLinear(torch.nn.Module):
                 device=torch.cuda.current_device(), dtype=args.params_dtype))
             _initialize_affine_weight_gpu(self.weight, init_method,
                                           partition_dim=0, stride=stride)
-        self.weight.name_=f"{self.name_}.weight"
+        self.weight.name_=f"{self.name_}.linear_weight"
             
         if bias:
             if args.use_cpu_initialization:
@@ -272,7 +272,7 @@ class ColumnParallelLinear(torch.nn.Module):
             # Always initialize bias to zero.
             with torch.no_grad():
                 self.bias.zero_()
-            self.bias.name_ = f"{self.name_}.bias"
+            self.bias.name_ = f"{self.name_}.linear_bias"
         else:
             self.register_parameter('bias', None)
 
@@ -291,8 +291,7 @@ class ColumnParallelLinear(torch.nn.Module):
         else:
             output = output_parallel 
         output_bias = self.bias if self.skip_bias_add else None
-        if get_log_scales():
-            record_scale(self.name_, output if output_bias is None else output + output_bias)
+        record_scale(self.name_, output, bias=output_bias)
         return output, output_bias
 
 
@@ -362,7 +361,7 @@ class RowParallelLinear(torch.nn.Module):
                 device=torch.cuda.current_device(), dtype=args.params_dtype))
             _initialize_affine_weight_gpu(self.weight, init_method,
                                           partition_dim=1, stride=stride)
-        self.weight.name_ = f"{self.name_}.weight"
+        self.weight.name_ = f"{self.name_}.linear_weight"
         if bias:
             if args.use_cpu_initialization:
                 self.bias = Parameter(torch.empty(self.output_size,
@@ -374,7 +373,7 @@ class RowParallelLinear(torch.nn.Module):
             # Always initialize bias to zero.
             with torch.no_grad():
                 self.bias.zero_()
-            self.bias.name_ = f"{self.name_}.bias"
+            self.bias.name_ = f"{self.name_}.linear_bias"
         else:
             self.register_parameter('bias', None)
 
@@ -396,7 +395,6 @@ class RowParallelLinear(torch.nn.Module):
         else:
             output = output_
             output_bias = self.bias
-        if get_log_scales():
-            record_scale(self.name_, output if output_bias is None else output + output_bias)
+        record_scale(self.name_, output, bias=output_bias)
         return output, output_bias
 

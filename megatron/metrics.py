@@ -16,12 +16,12 @@ def next_iteration(iteration:int):
     _iteration=iteration
 
 
-def record_scale(name:str,x:torch.Tensor,grad=True):
+def record_scale(name:str,x:torch.Tensor,grad=True, bias=None):
     global _metrics
     if get_log_scales():
-        _metrics[name]=get_scale(x)
+        _metrics[f"{name}.scale" if grad else name]=get_scale(x if bias is None else x+bias)
         if grad and x.requires_grad:
-            x.register_hook(lambda g: record_scale(f"{name}_grad",g,False))
+            x.register_hook(lambda g: record_scale(f"{name}.grad",g,False))
 
 
 def get_scale(x):

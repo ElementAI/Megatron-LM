@@ -144,14 +144,14 @@ class Embedding(MegatronModule):
             init_method=self.init_method)
         self._word_embeddings_key = 'word_embeddings'
         self.word_embeddings.name_=f"{self.name_}.word_embeddings"
-        self.word_embeddings.weight.name_=f"{self.word_embeddings.name_}.weight"
+        self.word_embeddings.weight.name_=f"{self.word_embeddings.name_}.embedding_weight"
 
         # Position embedding (serial).
         self.position_embeddings = torch.nn.Embedding(
             max_sequence_length, self.hidden_size)
         self._position_embeddings_key = 'position_embeddings'
         self.position_embeddings.name_=f"{self.name_}.position_embeddings"
-        self.position_embeddings.weight.name_=f"{self.position_embeddings.name_}.weight"
+        self.position_embeddings.weight.name_=f"{self.position_embeddings.name_}.embedding_weight"
         # Initialize the position embeddings.
         self.init_method(self.position_embeddings.weight)
 
@@ -164,7 +164,7 @@ class Embedding(MegatronModule):
             self.tokentype_embeddings = torch.nn.Embedding(self.num_tokentypes,
                                                            self.hidden_size)
             self.tokentype_embeddings.name_=f"{self.name_}.tokentype_embeddings"
-            self.tokentype_embeddings.weight.name_=f"{self.tokentype_embeddings.name_}.weight"
+            self.tokentype_embeddings.weight.name_=f"{self.tokentype_embeddings.name_}.embedding_weight"
             # Initialize the token-type embeddings.
             self.init_method(self.tokentype_embeddings.weight)
         else:
@@ -322,7 +322,7 @@ class TransformerLanguageModel(MegatronModule):
                                        args.hidden_dropout,
                                        self.init_method,
                                        self.num_tokentypes,
-                                       name_=f"{self.name_}.input_layer")
+                                       name_=f"{self.name_}.input_layer.embedding")
             self._embedding_key = 'embedding'
 
         # Transformer.

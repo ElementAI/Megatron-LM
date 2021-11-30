@@ -50,8 +50,8 @@ def get_linear_layer(rows, columns, init_method, name_=""):
     with torch.no_grad():
         layer.bias.zero_()
     layer.name_=name_
-    layer.weight.name_=f"{name_}.weight"
-    layer.bias.name_=f"{name_}.bias"
+    layer.weight.name_=f"{name_}.linear_weight"
+    layer.bias.name_=f"{name_}.linear_bias"
 
 
     old_forward=layer.forward

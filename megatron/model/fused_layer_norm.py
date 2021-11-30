@@ -76,9 +76,9 @@ class MixedFusedLayerNorm(torch.nn.Module):
         self.normalized_shape = torch.Size(normalized_shape)
         self.eps = eps
         self.weight = Parameter(torch.Tensor(*normalized_shape))
-        self.weight.name_=f"{self.name_}.weight"
+        self.weight.name_=f"{self.name_}.layer_norm_weight"
         self.bias = Parameter(torch.Tensor(*normalized_shape))
-        self.bias.name_=f"{self.name_}.bias"
+        self.bias.name_=f"{self.name_}.layer_norm_bias"
         self.reset_parameters()
 
 

@@ -17,11 +17,15 @@
 
 from abc import ABC
 from abc import abstractmethod
+import warnings
 
 import torch
 
-from apex.multi_tensor_apply import multi_tensor_applier
-import amp_C
+try:
+    from apex.multi_tensor_apply import multi_tensor_applier
+    import amp_C
+except ImportError:
+    warnings.warn("Apex not found")
 
 from megatron import get_timers
 from megatron import mpu
@@ -142,8 +146,8 @@ class MegatronOptimizer(ABC):
             for group in self.optimizer.param_groups:
                 for p in group['params']:
                     name_=getattr(p, "name_", "unknown")
-                    record_scale(f"optimizer.{name_}", p, False)
-                    record_scale(f"optimizer.{name_}_grad", p.grad, False)
+                    record_scale(f"optimizer.{name_}.scale", p, False)
+                    record_scale(f"optimizer.{name_}.grad", p.grad, False)
 
     # Promote state so it can be retrieved or set via
     # "optimizer_instance.state"

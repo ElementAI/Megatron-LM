@@ -25,7 +25,7 @@ _TRAIN_START_TIME = time.time()
 import torch
 from torch.nn.parallel.distributed import DistributedDataParallel as torchDDP
 
-from megatron import get_args
+from megatron.metrics import get_args, get_log_scales, next_iteration, log_metrics
 from megatron import get_timers
 from megatron import get_tensorboard_writer
 from megatron import get_current_global_batch_size
@@ -535,6 +535,9 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
             timers.write(timers_to_log, writer, iteration,
                          normalizer=total_iterations)
 
+    if get_log_scales():
+        log_metrics()
+
     if iteration % args.log_interval == 0:
         elapsed_time = timers('interval-time').elapsed()
         elapsed_time_per_iteration = elapsed_time / total_iterations
@@ -617,6 +620,7 @@ def train(forward_step_func, model, optimizer, lr_scheduler,
     print_datetime('before the start of training step')
     report_memory_flag = True
     while iteration < args.train_iters:
+        next_iteration(iteration)
         update_num_microbatches(args.consumed_train_samples)
         loss_dict, skipped_iter, grad_norm, num_zeros_in_grad = \
             train_step(forward_step_func,

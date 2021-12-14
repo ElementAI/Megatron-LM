@@ -302,6 +302,14 @@ def _build_index_mappings(name, data_prefix, documents, sizes,
     # Wait until rank 0 generate the index file.
     torch.distributed.barrier(device_ids=[int(os.environ['LOCAL_RANK'])])
 
+    # It can take some time for the file to be visible on other nodes.
+    for i in range(120):
+        if doc_idx_filename.is_file() and sample_idx_filename.is_file() and shuffle_idx_filename.is_file():
+            break
+        if i%10==0:
+            print_rank_0("    Waiting for index files...")
+        time.sleep(1.0)
+
     # Load mappings.
     start_time = time.time()
     print_rank_0(' > loading doc-idx mapping from {}'.format(

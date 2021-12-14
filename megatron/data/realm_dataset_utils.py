@@ -179,6 +179,13 @@ def get_block_samples_mapping(block_dataset, title_dataset, data_prefix, num_epo
 
     # Wait until rank 0 generate the index file.
     torch.distributed.barrier(device_ids=[int(os.environ['LOCAL_RANK'])])
+    # It can take some time for the file to be visible on other nodes.
+    for i in range(120):
+        if indexmap_filename.is_file():
+            break
+        if i%10==0:
+            print_rank_0("    Waiting for index file...")
+        time.sleep(1.0)
 
     # Load indexed dataset.
     print_rank_0(' > loading indexed mapping from {}'.format(

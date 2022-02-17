@@ -82,7 +82,7 @@ def parse_args(extra_args_provider=None, defaults={},
           'pipeline-model-parallel size: {} '.format(
               args.world_size, args.data_parallel_size,
               args.tensor_model_parallel_size,
-              args.pipeline_model_parallel_size), flush=True)
+              args.pipeline_model_parallel_size))
     if args.pipeline_model_parallel_size > 1:
         if args.pipeline_model_parallel_split_rank is not None:
             assert args.pipeline_model_parallel_split_rank < \

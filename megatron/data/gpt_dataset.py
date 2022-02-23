@@ -21,6 +21,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+import torch.distributed
 
 from megatron import mpu, print_rank_0
 from megatron.data.blendable_dataset import BlendableDataset
@@ -300,7 +301,7 @@ def _build_index_mappings(name, data_prefix, documents, sizes,
                          ' (seconds): {:4f}'.format(time.time() - start_time))
 
     # Wait until rank 0 generate the index file.
-    torch.distributed.barrier(device_ids=[int(os.environ['LOCAL_RANK'])])
+    torch.distributed.barrier(device_ids=[int(os.environ['LOCAL_RANK'])], group=mpu.get_data_parallel_group())
 
     # It can take some time for the file to be visible on other nodes.
     for i in range(120):

@@ -477,11 +477,16 @@ def train_step(forward_step_func, data_iterator,
         return loss_reduced, skipped_iter, grad_norm, num_zeros_in_grad
     return {}, skipped_iter, grad_norm, num_zeros_in_grad
 
+last_time=None
+first_time=None
+num_iters=None
 
 def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
                  loss_scale, report_memory_flag, skipped_iter,
                  grad_norm, params_norm, num_zeros_in_grad):
     """Log training information such as losses, timing, ...."""
+
+    global last_time, first_time, num_iters
     args = get_args()
     timers = get_timers()
     writer = get_tensorboard_writer()
@@ -639,14 +644,30 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
             total_loss_dict[skipped_iters_key])
         log_string += ' number of nan iterations: {:3d} |'.format(
             total_loss_dict[nan_iters_key])
+        current_time=time.perf_counter()
+        # Skip the slower first batch to be more accurate
+        if first_time is None:
+            first_time=current_time
+            num_iters=0
+        else:
+            num_iters+=1
+            log_string += f' batch time: {1000*(current_time-last_time):.2f} ms |'
+            log_string += f' avg time: {1000*(current_time-first_time)/num_iters:.2f} ms |'
+        last_time=current_time
+
+        log_string += f' memory: {torch.cuda.memory_allocated():,} |'
+        log_string += f' max memory: {torch.cuda.max_memory_allocated():,} |'
+        log_string += f' reserved: {torch.cuda.memory_reserved():,} |'
+        log_string += f' max reserved: {torch.cuda.memory_reserved():,} |'
+        torch.cuda.reset_peak_memory_stats()
         total_loss_dict[advanced_iters_key] = 0
         total_loss_dict[skipped_iters_key] = 0
         total_loss_dict[nan_iters_key] = 0
         print_rank_last(log_string)
-        if report_memory_flag and learning_rate > 0.:
-            # Report memory after optimizer state has been initialized.
-            report_memory('(after {} iterations)'.format(iteration))
-            report_memory_flag = False
+        #if report_memory_flag and learning_rate > 0.:
+        #    # Report memory after optimizer state has been initialized.
+        #    report_memory('(after {} iterations)'.format(iteration))
+        #    report_memory_flag = False
         timers.log(timers_to_log, normalizer=args.log_interval)
 
     return report_memory_flag

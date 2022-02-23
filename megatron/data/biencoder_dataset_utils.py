@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+import torch.distributed
 
 from megatron import get_args, get_tokenizer, mpu, print_rank_0
 from megatron.data.dataset_utils import create_masked_lm_predictions, \
@@ -188,7 +189,7 @@ def get_block_samples_mapping(block_dataset, title_dataset, data_prefix, num_epo
             time.time() - start_time))
 
     # Wait until rank 0 generate the index file.
-    torch.distributed.barrier(device_ids=[int(os.environ['LOCAL_RANK'])])
+    torch.distributed.barrier(device_ids=[int(os.environ['LOCAL_RANK'])], group=mpu.get_data_parallel_group())
     # It can take some time for the file to be visible on other nodes.
     for i in range(120):
         if indexmap_filename.is_file():

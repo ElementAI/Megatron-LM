@@ -617,7 +617,10 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
             if args.log_timers_to_tensorboard:
                 writer.add_scalar('iteration-time',
                                   elapsed_time_per_iteration, iteration)
-        log_string = ' iteration {:8d}/{:8d} |'.format(
+        log_string = ''
+        if args.name is not None:
+            log_string += ' {} |'.format(args.name)
+        log_string += ' iteration {:8d}/{:8d} |'.format(
             iteration, args.train_iters)
         log_string += ' consumed samples: {:12d} |'.format(
             args.consumed_train_samples)
@@ -657,8 +660,7 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
 
         log_string += f' memory: {torch.cuda.memory_allocated():,} |'
         log_string += f' max memory: {torch.cuda.max_memory_allocated():,} |'
-        log_string += f' reserved: {torch.cuda.memory_reserved():,} |'
-        log_string += f' max reserved: {torch.cuda.memory_reserved():,} |'
+        log_string += f' max reserved: {torch.cuda.max_memory_reserved():,}'
         torch.cuda.reset_peak_memory_stats()
         total_loss_dict[advanced_iters_key] = 0
         total_loss_dict[skipped_iters_key] = 0

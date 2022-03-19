@@ -652,7 +652,7 @@ def get_samples_mapping(indexed_dataset,
         max_num_samples = np.iinfo(np.int64).max - 1
 
     # Filename of the index mapping
-    indexmap_filename = Path(data_prefix).name
+    indexmap_filename = data_prefix
     indexmap_filename += '_{}_indexmap'.format(name)
     if num_epochs != (np.iinfo(np.int32).max - 1):
         indexmap_filename += '_{}ep'.format(num_epochs)
@@ -663,7 +663,11 @@ def get_samples_mapping(indexed_dataset,
     indexmap_filename += '_{}s'.format(seed)
     indexmap_filename += '.npy'
 
-    indexmap_filename = Path(get_args().save).joinpath(indexmap_filename).resolve()
+    args=get_args()
+    if args.indexmap_path is not None:
+        indexmap_path=Path(get_args().indexmap_path).resolve()
+        indexmap_path.mkdir(parents=True, exist_ok=True)
+        indexmap_filename = indexmap_path/Path(indexmap_filename).name
 
     # Build the indexed mapping if not exist.
     if torch.distributed.get_rank() == 0 and \

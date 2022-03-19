@@ -343,6 +343,8 @@ def _add_network_size_args(parser):
 def _add_logging_args(parser):
     group = parser.add_argument_group(title='logging')
 
+    group.add_argument('--name', type=str, default=None,
+                       help='A name for the experiment.')
     group.add_argument('--log-params-norm', action='store_true',
                        help='If set, calculate and log parameters norm.')
     group.add_argument('--log-scales', action='store_true',
@@ -703,6 +705,8 @@ def _add_data_args(parser):
                        '1) a single data path, 2) multiple datasets in the'
                        'form: dataset1-weight dataset1-path dataset2-weight '
                        'dataset2-path ...')
+    group.add_argument('--indexmap-path', type=str, default=None,
+                       help='Path for intermediate data files')
     group.add_argument('--split', type=str, default='969, 30, 1',
                        help='Comma-separated list of proportions for training,'
                        ' validation, and test split. For example the split '

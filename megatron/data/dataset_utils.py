@@ -665,7 +665,7 @@ def get_samples_mapping(indexed_dataset,
 
     args=get_args()
     if args.indexmap_path is not None:
-        indexmap_path=Path(get_args().indexmap_path).resolve()
+        indexmap_path=Path(args.indexmap_path).resolve()
         indexmap_path.mkdir(parents=True, exist_ok=True)
         indexmap_filename = indexmap_path/Path(indexmap_filename).name
 

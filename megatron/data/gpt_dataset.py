@@ -23,7 +23,7 @@ import numpy as np
 import torch
 import torch.distributed
 
-from megatron import mpu, print_rank_0
+from megatron import mpu, print_rank_0, get_args
 from megatron.data.blendable_dataset import BlendableDataset
 from megatron.data.dataset_utils import get_datasets_weights_and_num_samples
 from megatron.data.dataset_utils import get_train_valid_test_split_
@@ -204,7 +204,7 @@ def _build_index_mappings(name, data_prefix, documents, sizes,
     np_rng = np.random.RandomState(seed=seed)
 
     # Filename of the index mappings.
-    _filename = Path(data_prefix).name
+    _filename = data_prefix
     _filename += '_{}_indexmap'.format(name)
     _filename += '_{}ns'.format(num_samples)
     _filename += '_{}sl'.format(seq_length)
@@ -213,10 +213,13 @@ def _build_index_mappings(name, data_prefix, documents, sizes,
     sample_idx_filename = _filename + '_sample_idx.npy'
     shuffle_idx_filename = _filename + '_shuffle_idx.npy'
 
-    output_folder = Path(get_args().save)
-    doc_idx_filename = output_folder.joinpath(doc_idx_filename).resolve()
-    sample_idx_filename =  output_folder.joinpath(sample_idx_filename).resolve()
-    shuffle_idx_filename = output_folder.joinpath(shuffle_idx_filename).resolve()
+    args=get_args()
+    if args.indexmap_path is not None:
+        indexmap_path=Path(args.indexmap_path).resolve()
+        indexmap_path.mkdir(parents=True, exist_ok=True)
+        doc_idx_filename = indexmap_path/Path(doc_idx_filename).name
+        sample_idx_filename = indexmap_path/Path(sample_idx_filename).name
+        shuffle_idx_filename = indexmap_path/Path(shuffle_idx_filename).name
 
     # Build the indexed mapping if not exist.
     if torch.distributed.get_rank() == 0:

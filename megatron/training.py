@@ -654,7 +654,7 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
             num_iters=0
         else:
             num_iters+=1
-            log_string += f' batch time: {1000*(current_time-last_time):.2f} ms |'
+            log_string += f' batch time: {1000*(current_time-last_time)/args.log_interval:.2f} ms |'
             log_string += f' avg time: {1000*(current_time-first_time)/num_iters/args.log_interval:.2f} ms |'
         last_time=current_time
 

@@ -18,8 +18,7 @@
 import math
 
 import torch
-
-from megatron import get_args
+from megatron.metrics import record_scale
 
 def init_method_normal(sigma):
     """Init method based on N(0, sigma)."""
@@ -31,7 +30,7 @@ def init_method_normal(sigma):
 
 def scaled_init_method_normal(sigma, num_layers):
     """Init method based on N(0, sigma/sqrt(2*num_layers)."""
-    std = sigma / math.sqrt(2.0 * num_layers)
+    std = sigma / math.sqrt(2.0 * max(num_layers,1))
 
     def init_(tensor):
         return torch.nn.init.normal_(tensor, mean=0.0, std=std)
@@ -44,12 +43,26 @@ def attention_mask_func(attention_scores, attention_mask):
     return attention_scores
 
 
-def get_linear_layer(rows, columns, init_method):
+def get_linear_layer(rows, columns, init_method, name_=""):
     """Simple linear layer with weight initialization."""
     layer = torch.nn.Linear(rows, columns)
     init_method(layer.weight)
     with torch.no_grad():
         layer.bias.zero_()
+    layer.name_=name_
+    layer.weight.name_=f"{name_}.linear_weight"
+    layer.bias.name_=f"{name_}.linear_bias"
+
+
+    old_forward=layer.forward
+
+    def forward(input):
+        output=old_forward(input)
+        record_scale(layer.name_,output)
+        return output
+
+    layer.forward=forward
+
     return layer
 
 @torch.jit.script

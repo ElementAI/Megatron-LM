@@ -17,15 +17,20 @@
 
 from abc import ABC
 from abc import abstractmethod
+import warnings
 
 import torch
 
-from apex.multi_tensor_apply import multi_tensor_applier
-import amp_C
+try:
+    from apex.multi_tensor_apply import multi_tensor_applier
+    import amp_C
+except ImportError:
+    warnings.warn("Apex not found")
 
 from megatron import get_timers
 from megatron import mpu
 from megatron import print_rank_0
+from megatron.metrics import record_scale,get_log_scales
 
 from .clip_grads import clip_grad_norm_fp32, count_zeros_fp32
 
@@ -142,6 +147,13 @@ class MegatronOptimizer(ABC):
     def load_state_dict(self, state_dict):
         pass
 
+    def _record_scales(self):
+        if get_log_scales():
+            for group in self.optimizer.param_groups:
+                for p in group['params']:
+                    name_=getattr(p, "name_", "unknown")
+                    record_scale(f"optimizer.{name_}.scale", p, False)
+                    record_scale(f"optimizer.{name_}.grad", p.grad, False)
 
     # Promote state so it can be retrieved or set via
     # "optimizer_instance.state"
@@ -252,6 +264,8 @@ class Float16OptimizerWithFloat16Params(MegatronOptimizer):
                         float16_params_this_group.append(param)
                         # Create a copy
                         main_param = param.detach().clone().float()
+                        if hasattr(param, "name_"):
+                            main_param.name_=param.name_
                         # Copy tensor model parallel attributes.
                         mpu.copy_tensor_model_parallel_attributes(main_param,
                                                                   param)
@@ -432,6 +446,7 @@ class Float16OptimizerWithFloat16Params(MegatronOptimizer):
         num_zeros_in_grad = self.count_zeros() if \
                             self.log_num_zeros_in_grad else None
 
+        self._record_scales()
         # Step the optimizer.
         self.optimizer.step()
 
@@ -537,6 +552,7 @@ class FP32Optimizer(MegatronOptimizer):
         num_zeros_in_grad = self.count_zeros() if \
                             self.log_num_zeros_in_grad else None
 
+        self._record_scales()
         # Update parameters.
         self.optimizer.step()
 

@@ -25,7 +25,7 @@ _TRAIN_START_TIME = time.time()
 import torch
 from torch.nn.parallel.distributed import DistributedDataParallel as torchDDP
 
-from megatron import get_args
+from megatron.metrics import get_args, get_log_scales, next_iteration, log_metrics
 from megatron import get_signal_handler
 from megatron import get_timers
 from megatron import get_tensorboard_writer
@@ -51,7 +51,9 @@ from megatron.data.data_samplers import build_pretraining_data_loader
 from megatron.utils import calc_params_l2_norm
 from megatron.schedules import get_forward_backward_func
 from megatron.utils import report_memory
+import logging
 
+logger = logging.getLogger(__name__)
 
 
 def print_datetime(string):
@@ -93,6 +95,7 @@ def pretrain(train_valid_test_dataset_provider,
     """
 
     # Initalize and get arguments, timers, and Tensorboard writer.
+    logger.info("Initializing megatron")
     initialize_megatron(extra_args_provider=extra_args_provider,
                         args_defaults=args_defaults)
 
@@ -104,7 +107,7 @@ def pretrain(train_valid_test_dataset_provider,
     torch.distributed.all_reduce(start_time_tensor,
                                  op=torch.distributed.ReduceOp.MIN)
     _TRAIN_START_TIME = start_time_tensor.item()
-    print_rank_0('time to initialize megatron (seconds): {:.3f}'.format(
+    logger.info('time to initialize megatron (seconds): {:.3f}'.format(
         time.time() - _TRAIN_START_TIME))
     print_datetime('after megatron is initialized')
 
@@ -474,11 +477,16 @@ def train_step(forward_step_func, data_iterator,
         return loss_reduced, skipped_iter, grad_norm, num_zeros_in_grad
     return {}, skipped_iter, grad_norm, num_zeros_in_grad
 
+last_time=None
+first_time=None
+num_iters=None
 
 def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
                  loss_scale, report_memory_flag, skipped_iter,
                  grad_norm, params_norm, num_zeros_in_grad):
     """Log training information such as losses, timing, ...."""
+
+    global last_time, first_time, num_iters
     args = get_args()
     timers = get_timers()
     writer = get_tensorboard_writer()
@@ -599,6 +607,9 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
                 iteration,
             )
 
+    if get_log_scales():
+        log_metrics()
+
     if iteration % args.log_interval == 0:
         elapsed_time = timers('interval-time').elapsed()
         elapsed_time_per_iteration = elapsed_time / total_iterations
@@ -606,7 +617,10 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
             if args.log_timers_to_tensorboard:
                 writer.add_scalar('iteration-time',
                                   elapsed_time_per_iteration, iteration)
-        log_string = ' iteration {:8d}/{:8d} |'.format(
+        log_string = ''
+        if args.name is not None:
+            log_string += ' {} |'.format(args.name)
+        log_string += ' iteration {:8d}/{:8d} |'.format(
             iteration, args.train_iters)
         log_string += ' consumed samples: {:12d} |'.format(
             args.consumed_train_samples)
@@ -633,14 +647,29 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
             total_loss_dict[skipped_iters_key])
         log_string += ' number of nan iterations: {:3d} |'.format(
             total_loss_dict[nan_iters_key])
+        current_time=time.perf_counter()
+        # Skip the slower first batch to be more accurate
+        if first_time is None:
+            first_time=current_time
+            num_iters=0
+        else:
+            num_iters+=1
+            log_string += f' batch time: {1000*(current_time-last_time)/args.log_interval:.2f} ms |'
+            log_string += f' avg time: {1000*(current_time-first_time)/num_iters/args.log_interval:.2f} ms |'
+        last_time=current_time
+
+        log_string += f' memory: {torch.cuda.memory_allocated():,} |'
+        log_string += f' max memory: {torch.cuda.max_memory_allocated():,} |'
+        log_string += f' max reserved: {torch.cuda.max_memory_reserved():,}'
+        torch.cuda.reset_peak_memory_stats()
         total_loss_dict[advanced_iters_key] = 0
         total_loss_dict[skipped_iters_key] = 0
         total_loss_dict[nan_iters_key] = 0
         print_rank_last(log_string)
-        if report_memory_flag and learning_rate > 0.:
-            # Report memory after optimizer state has been initialized.
-            report_memory('(after {} iterations)'.format(iteration))
-            report_memory_flag = False
+        #if report_memory_flag and learning_rate > 0.:
+        #    # Report memory after optimizer state has been initialized.
+        #    report_memory('(after {} iterations)'.format(iteration))
+        #    report_memory_flag = False
         timers.log(timers_to_log, normalizer=args.log_interval)
 
     return report_memory_flag
@@ -681,6 +710,7 @@ def train(forward_step_func, model, optimizer, lr_scheduler,
     print_datetime('before the start of training step')
     report_memory_flag = True
     while iteration < args.train_iters:
+        next_iteration(iteration)
         update_num_microbatches(args.consumed_train_samples)
         loss_dict, skipped_iter, grad_norm, num_zeros_in_grad = \
             train_step(forward_step_func,
@@ -901,8 +931,10 @@ def build_train_valid_test_data_iterators(
         # Need to broadcast num_tokens and num_type_tokens.
         flags = torch.cuda.LongTensor(
             [int(do_train), int(do_valid), int(do_test)])
+        logger.info("Broadcasting data iterator")
     else:
         flags = torch.cuda.LongTensor([0, 0, 0])
+        logger.info("Waiting for data iterator")
 
     # Broadcast num tokens.
     torch.distributed.broadcast(flags,

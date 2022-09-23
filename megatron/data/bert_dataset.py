@@ -118,7 +118,7 @@ def build_training_sample(sample,
     if binary_head:
         # We assume that we have at least two sentences in the sample
         assert len(sample) > 1
-    assert target_seq_length <= max_seq_length
+    assert target_seq_length <= max_seq_length-2
 
     # Divide sample into two segments (A and B).
     if binary_head:

@@ -22,7 +22,10 @@ import sys
 import json
 import logging
 import os
-import regex as re
+try:
+    import regex as re
+except ImportError:
+    pass
 from io import open
 
 try:

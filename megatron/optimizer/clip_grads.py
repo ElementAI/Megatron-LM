@@ -17,9 +17,13 @@
 
 import torch
 from torch._six import inf
+import warnings
 
-from apex.multi_tensor_apply import multi_tensor_applier
-import amp_C
+try:
+    from apex.multi_tensor_apply import multi_tensor_applier
+    import amp_C
+except ImportError:
+    warnings.warn("Apex not found")
 
 from megatron import mpu
 from megatron.model.module import param_is_not_shared

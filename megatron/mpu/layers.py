@@ -36,7 +36,7 @@ from .random import get_cuda_rng_tracker
 from .utils import divide
 from .utils import split_tensor_along_last_dim
 from .utils import VocabUtility
-from megatron import get_args
+from megatron.metrics import get_args, get_log_scales, record_scale
 
 
 _MODEL_PARALLEL_ATTRIBUTE_DEFAULTS = {'tensor_model_parallel': False,
@@ -257,8 +257,9 @@ class ColumnParallelLinear(torch.nn.Module):
     def __init__(self, input_size, output_size, bias=True, gather_output=True,
                  init_method=init.xavier_normal_, stride=1,
                  keep_master_weight_for_test=False,
-                 skip_bias_add=False):
+                 skip_bias_add=False,name_=""):
         super(ColumnParallelLinear, self).__init__()
+        self.name_=name_
 
         # Keep input parameters
         self.input_size = input_size
@@ -288,7 +289,7 @@ class ColumnParallelLinear(torch.nn.Module):
                 device=torch.cuda.current_device(), dtype=args.params_dtype))
             _initialize_affine_weight_gpu(self.weight, init_method,
                                           partition_dim=0, stride=stride)
-
+        self.weight.name_=f"{self.name_}.linear_weight"
         if bias:
             if args.use_cpu_initialization:
                 self.bias = Parameter(torch.empty(
@@ -302,6 +303,7 @@ class ColumnParallelLinear(torch.nn.Module):
             # Always initialize bias to zero.
             with torch.no_grad():
                 self.bias.zero_()
+            self.bias.name_ = f"{self.name_}.linear_bias"
         else:
             self.register_parameter('bias', None)
         self.async_tensor_model_parallel_allreduce = (
@@ -334,6 +336,7 @@ class ColumnParallelLinear(torch.nn.Module):
         else:
             output = output_parallel
         output_bias = self.bias if self.skip_bias_add else None
+        record_scale(self.name_, output, bias=output_bias)
         return output, output_bias
 
 
@@ -371,8 +374,9 @@ class RowParallelLinear(torch.nn.Module):
                  input_is_parallel=False,
                  init_method=init.xavier_normal_, stride=1,
                  keep_master_weight_for_test=False,
-                 skip_bias_add=False):
+                 skip_bias_add=False,name_=""):
         super(RowParallelLinear, self).__init__()
+        self.name_=name_
 
         # Keep input parameters
         self.input_size = input_size
@@ -402,6 +406,7 @@ class RowParallelLinear(torch.nn.Module):
                 device=torch.cuda.current_device(), dtype=args.params_dtype))
             _initialize_affine_weight_gpu(self.weight, init_method,
                                           partition_dim=1, stride=stride)
+        self.weight.name_ = f"{self.name_}.linear_weight"
         if bias:
             if args.use_cpu_initialization:
                 self.bias = Parameter(torch.empty(self.output_size,
@@ -413,6 +418,7 @@ class RowParallelLinear(torch.nn.Module):
             # Always initialize bias to zero.
             with torch.no_grad():
                 self.bias.zero_()
+            self.bias.name_ = f"{self.name_}.linear_bias"
         else:
             self.register_parameter('bias', None)
 
@@ -434,5 +440,6 @@ class RowParallelLinear(torch.nn.Module):
         else:
             output = output_
             output_bias = self.bias
+        record_scale(self.name_, output, bias=output_bias)
         return output, output_bias
 

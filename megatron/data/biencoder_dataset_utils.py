@@ -1,8 +1,10 @@
 import os
 import time
+from pathlib import Path
 
 import numpy as np
 import torch
+import torch.distributed
 
 from megatron import get_args, get_tokenizer, mpu, print_rank_0
 from megatron.data.dataset_utils import create_masked_lm_predictions, \
@@ -146,6 +148,12 @@ def get_block_samples_mapping(block_dataset, title_dataset, data_prefix, num_epo
         indexmap_filename += '_1sentok'
     indexmap_filename += '.npy'
 
+    args=get_args()
+    if args.indexmap_path is not None:
+        indexmap_path=Path(get_args().indexmap_path).resolve()
+        indexmap_path.mkdir(parents=True, exist_ok=True)
+        indexmap_filename = indexmap_path/Path(indexmap_filename).name
+
     # Build the indexed mapping if not exist.
     if mpu.get_data_parallel_rank() == 0 and \
             not os.path.isfile(indexmap_filename):
@@ -184,13 +192,15 @@ def get_block_samples_mapping(block_dataset, title_dataset, data_prefix, num_epo
                      '(seconds): {:4f}'.format(
             time.time() - start_time))
 
-    # This should be a barrier but nccl barrier assumes
-    # device_index=rank which is not the case for model
-    # parallel case
-    counts = torch.cuda.LongTensor([1])
-    torch.distributed.all_reduce(counts, group=mpu.get_data_parallel_group())
-    assert counts[0].item() == torch.distributed.get_world_size(
-        group=mpu.get_data_parallel_group())
+    # Wait until rank 0 generate the index file.
+    torch.distributed.barrier(device_ids=[int(os.environ['LOCAL_RANK'])], group=mpu.get_data_parallel_group())
+    # It can take some time for the file to be visible on other nodes.
+    for i in range(120):
+        if indexmap_filename.is_file():
+            break
+        if i%10==0:
+            print_rank_0("    Waiting for index file...")
+        time.sleep(1.0)
 
     # Load indexed dataset.
     print_rank_0(' > loading indexed mapping from {}'.format(

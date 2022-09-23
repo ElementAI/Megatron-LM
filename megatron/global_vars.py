@@ -267,9 +267,5 @@ class Timers:
             elapsed_time = self.timers[name].elapsed(
                 reset=reset) * 1000.0 / normalizer
             string += ' | {}: {:.2f}'.format(name, elapsed_time)
-        if torch.distributed.is_initialized():
-            if torch.distributed.get_rank() == (
-                    torch.distributed.get_world_size() - 1):
-                print(string, flush=True)
-        else:
-            print(string, flush=True)
+        from megatron import print_rank_last
+        print_rank_last(string)

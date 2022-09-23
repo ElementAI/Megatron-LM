@@ -23,6 +23,7 @@ from torch.nn.parameter import Parameter
 from torch.nn import init
 import importlib
 
+from megatron.metrics import record_scale
 try:
     from apex.contrib.layer_norm.layer_norm import FastLayerNormFN
     HAVE_PERSIST_LAYER_NORM = True
@@ -67,8 +68,9 @@ class FusedLayerNormAffineFunction(torch.autograd.Function):
 
 class MixedFusedLayerNorm(torch.nn.Module):
 
-  def __init__(self, normalized_shape, eps=1e-5, no_persist_layer_norm=True):
+  def __init__(self, normalized_shape, eps=1e-5, no_persist_layer_norm=True, name_=""):
         super(MixedFusedLayerNorm, self).__init__()
+        self.name_=name_
 
         global fused_mix_prec_layer_norm_cuda
         fused_mix_prec_layer_norm_cuda = importlib.import_module(
@@ -89,7 +91,9 @@ class MixedFusedLayerNorm(torch.nn.Module):
         self.normalized_shape = torch.Size(normalized_shape)
         self.eps = eps
         self.weight = Parameter(torch.Tensor(*normalized_shape))
+        self.weight.name_=f"{self.name_}.layer_norm_weight"
         self.bias = Parameter(torch.Tensor(*normalized_shape))
+        self.bias.name_=f"{self.name_}.layer_norm_bias"
         self.reset_parameters()
         self.no_persist_layer_norm = no_persist_layer_norm
 
@@ -101,11 +105,12 @@ class MixedFusedLayerNorm(torch.nn.Module):
 
 
   def forward(self, input):
-
     if self.no_persist_layer_norm:
-        return FusedLayerNormAffineFunction.apply(
+        output= FusedLayerNormAffineFunction.apply(
           input, self.weight, self.bias, self.normalized_shape, self.eps)
     else:
-        return FastLayerNormFN.apply(
+        output= FastLayerNormFN.apply(
           input, self.weight, self.bias, self.eps)
+    record_scale(self.name_, output)
+    return output
 

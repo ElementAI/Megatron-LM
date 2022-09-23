@@ -20,8 +20,11 @@ import sys
 import torch
 from torch.nn.parallel import DistributedDataParallel as torchDDP
 
-from apex.multi_tensor_apply import multi_tensor_applier
-import amp_C
+try:
+    from apex.multi_tensor_apply import multi_tensor_applier
+    import amp_C
+except ImportError:
+    pass
 
 from megatron import get_args
 from megatron import print_rank_0

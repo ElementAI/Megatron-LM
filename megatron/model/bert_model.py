@@ -15,10 +15,12 @@
 
 """BERT model."""
 
+import logging
 import torch
 
 from megatron import get_args
 from megatron import mpu
+from megatron.metrics import record_scale
 from megatron.model.enums import AttnMaskType
 from megatron.model.language_model import parallel_lm_logits
 from megatron.model.language_model import get_language_model
@@ -67,18 +69,20 @@ class BertLMHead(MegatronModule):
     """
 
     def __init__(self, mpu_vocab_size, hidden_size, init_method,
-                 layernorm_epsilon, parallel_output):
+                 layernorm_epsilon, parallel_output, name_=""):
 
         super(BertLMHead, self).__init__()
+        self.name_=name_
 
         args = get_args()
 
         self.bias = torch.nn.Parameter(torch.zeros(mpu_vocab_size))
+        self.bias.name_=f"{self.name_}.logits.linear_bias"
         mpu.set_tensor_model_parallel_attributes(self.bias, True, 0, 1)
         self.parallel_output = parallel_output
 
-        self.dense = get_linear_layer(hidden_size, hidden_size, init_method)
-        self.layernorm = LayerNorm(hidden_size, eps=layernorm_epsilon)
+        self.dense = get_linear_layer(hidden_size, hidden_size, init_method, name_=f"{self.name_}.dense")
+        self.layernorm = LayerNorm(hidden_size, eps=layernorm_epsilon, name_=f"{self.name_}.layer_norm")
         self.gelu = torch.nn.functional.gelu
         if args.openai_gelu:
             self.gelu = openai_gelu
@@ -86,13 +90,16 @@ class BertLMHead(MegatronModule):
             self.gelu = erf_gelu
 
     def forward(self, hidden_states, word_embeddings_weight):
+        record_scale(f"{self.name_}.hidden",hidden_states)
         hidden_states = self.dense(hidden_states)
         hidden_states = self.gelu(hidden_states)
+        record_scale(f"{self.name_}.gelu",hidden_states)
         hidden_states = self.layernorm(hidden_states)
         output = parallel_lm_logits(hidden_states,
                                     word_embeddings_weight,
                                     self.parallel_output,
                                     bias=self.bias)
+        record_scale(f"{self.name_}.logits",output)
         return output
 
 
@@ -129,9 +136,11 @@ class BertModel(MegatronModule):
                  add_binary_head=True,
                  parallel_output=True,
                  pre_process=True,
-                 post_process=True):
+                 post_process=True,
+                 name_="bert"):
         super(BertModel, self).__init__()
         args = get_args()
+        self.name_=name_
 
         self.fp16_lm_cross_entropy = args.fp16_lm_cross_entropy
         self.add_binary_head = add_binary_head
@@ -150,18 +159,20 @@ class BertModel(MegatronModule):
             init_method=init_method,
             scaled_init_method=scaled_init_method,
             pre_process=self.pre_process,
-            post_process=self.post_process)
+            post_process=self.post_process,
+            name_=self.name_)
 
         self.initialize_word_embeddings(init_method_normal)
         if self.post_process:
             self.lm_head = BertLMHead(
                 self.word_embeddings_weight().size(0),
-                args.hidden_size, init_method, args.layernorm_epsilon, parallel_output)
+                args.hidden_size, init_method, args.layernorm_epsilon, parallel_output,
+                name_=f"{self.name_}.output_layer.lm_head")
             self._lm_head_key = 'lm_head'
             self.binary_head = None
             if self.add_binary_head:
                 self.binary_head = get_linear_layer(args.hidden_size, 2,
-                                                    init_method)
+                                                    init_method, name_=f"{self.name_}.output_layer.sop_head.binary_head")
                 self._binary_head_key = 'binary_head'
 
     def set_input_tensor(self, input_tensor):

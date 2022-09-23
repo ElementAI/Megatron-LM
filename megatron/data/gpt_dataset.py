@@ -17,11 +17,13 @@
 
 import os
 import time
+from pathlib import Path
 
 import numpy as np
 import torch
+import torch.distributed
 
-from megatron import mpu, print_rank_0
+from megatron import mpu, print_rank_0, get_args
 from megatron.data.blendable_dataset import BlendableDataset
 from megatron.data.dataset_utils import get_datasets_weights_and_num_samples
 from megatron.data.dataset_utils import get_train_valid_test_split_
@@ -211,6 +213,14 @@ def _build_index_mappings(name, data_prefix, documents, sizes,
     sample_idx_filename = _filename + '_sample_idx.npy'
     shuffle_idx_filename = _filename + '_shuffle_idx.npy'
 
+    args=get_args()
+    if args.indexmap_path is not None:
+        indexmap_path=Path(args.indexmap_path).resolve()
+        indexmap_path.mkdir(parents=True, exist_ok=True)
+        doc_idx_filename = indexmap_path/Path(doc_idx_filename).name
+        sample_idx_filename = indexmap_path/Path(sample_idx_filename).name
+        shuffle_idx_filename = indexmap_path/Path(shuffle_idx_filename).name
+
     # Build the indexed mapping if not exist.
     if torch.distributed.get_rank() == 0:
         if (not os.path.isfile(doc_idx_filename)) or \
@@ -293,15 +303,16 @@ def _build_index_mappings(name, data_prefix, documents, sizes,
             print_rank_0(' > elasped time to build and save shuffle-idx mapping'
                          ' (seconds): {:4f}'.format(time.time() - start_time))
 
-    # This should be a barrier but nccl barrier assumes
-    # device_index=rank which is not the case for model
-    # parallel case
-    counts = torch.cuda.LongTensor([1])
-    torch.distributed.all_reduce(counts, group=mpu.get_data_parallel_group())
-    torch.distributed.all_reduce(counts, group=mpu.get_pipeline_model_parallel_group())
-    assert counts[0].item() == (
-        torch.distributed.get_world_size() //
-        torch.distributed.get_world_size(group=mpu.get_tensor_model_parallel_group()))
+    # Wait until rank 0 generate the index file.
+    torch.distributed.barrier(device_ids=[int(os.environ['LOCAL_RANK'])], group=mpu.get_data_parallel_group())
+
+    # It can take some time for the file to be visible on other nodes.
+    for i in range(120):
+        if doc_idx_filename.is_file() and sample_idx_filename.is_file() and shuffle_idx_filename.is_file():
+            break
+        if i%10==0:
+            print_rank_0("    Waiting for index files...")
+        time.sleep(1.0)
 
     # Load mappings.
     start_time = time.time()

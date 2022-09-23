@@ -13,8 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from apex.optimizers import FusedAdam as Adam
-from apex.optimizers import FusedSGD as SGD
+import warnings
+
+try:
+    from apex.optimizers import FusedAdam as Adam
+    from apex.optimizers import FusedSGD as SGD
+except ImportError:
+    warnings.warn("Apex not found")
 
 from megatron import get_args
 from megatron.model import LayerNorm
@@ -52,6 +57,7 @@ def get_megatron_optimizer(model):
 
     # Base optimizer.
     param_groups = _get_params_for_weight_decay_optimization(model)
+    print("weight_decay", args.weight_decay)
     if args.optimizer == 'adam':
         optimizer = Adam(param_groups,
                          lr=args.lr,

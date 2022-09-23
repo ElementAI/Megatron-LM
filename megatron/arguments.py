@@ -16,9 +16,12 @@
 """Megatron arguments."""
 
 import argparse
+import logging
 import os
 
 import torch
+
+logger = logging.getLogger(__name__)
 
 def parse_args(extra_args_provider=None, defaults={},
                ignore_unknown_args=False):
@@ -74,13 +77,12 @@ def parse_args(extra_args_provider=None, defaults={},
         'size ({})'.format(args.world_size, args.tensor_model_parallel_size,
                            args.pipeline_model_parallel_size)
     args.data_parallel_size = args.world_size // model_parallel_size
-    if args.rank == 0:
-        print('using world size: {}, data-parallel-size: {}, '
-              'tensor-model-parallel size: {}, '
-              'pipeline-model-parallel size: {} '.format(
-                  args.world_size, args.data_parallel_size,
-                  args.tensor_model_parallel_size,
-                  args.pipeline_model_parallel_size), flush=True)
+    logger.info('using world size: {}, data-parallel-size: {}, '
+          'tensor-model-parallel size: {}, '
+          'pipeline-model-parallel size: {} '.format(
+              args.world_size, args.data_parallel_size,
+              args.tensor_model_parallel_size,
+              args.pipeline_model_parallel_size))
     if args.pipeline_model_parallel_size > 1:
         if args.pipeline_model_parallel_split_rank is not None:
             assert args.pipeline_model_parallel_split_rank < \
@@ -112,11 +114,9 @@ def parse_args(extra_args_provider=None, defaults={},
         # arguments that are passed to the program. We check this by
         # ensuring the arg is set to None.
         if getattr(args, key) is not None:
-            if args.rank == 0:
-                print('WARNING: overriding default arguments for {key}:{v} \
-                       with {key}:{v2}'.format(key=key, v=defaults[key],
-                                               v2=getattr(args, key)),
-                                               flush=True)
+            logger.warning('Overriding default arguments for {key}:{v} \
+                   with {key}:{v2}'.format(key=key, v=defaults[key],
+                                           v2=getattr(args, key)))
         else:
             setattr(args, key, defaults[key])
 
@@ -125,9 +125,8 @@ def parse_args(extra_args_provider=None, defaults={},
     assert args.micro_batch_size > 0
     if args.global_batch_size is None:
         args.global_batch_size = args.micro_batch_size * args.data_parallel_size
-        if args.rank == 0:
-            print('setting global batch size to {}'.format(
-                args.global_batch_size), flush=True)
+        logger.info('setting global batch size to {}'.format(
+            args.global_batch_size))
     assert args.global_batch_size > 0
     if args.num_layers_per_virtual_pipeline_stage is not None:
         assert args.pipeline_model_parallel_size > 2, \
@@ -154,13 +153,10 @@ def parse_args(extra_args_provider=None, defaults={},
         # be done in fp32.
         if not args.accumulate_allreduce_grads_in_fp32:
             args.accumulate_allreduce_grads_in_fp32 = True
-            if args.rank == 0:
-                print('accumulate and all-reduce gradients in fp32 for '
-                      'bfloat16 data type.', flush=True)
+            logger.info('accumulate and all-reduce gradients in fp32 for '
+                  'bfloat16 data type.')
 
-    if args.rank == 0:
-        print('using {} for parameters ...'.format(args.params_dtype),
-              flush=True)
+    logger.info('using {} for parameters ...'.format(args.params_dtype))
 
     # If we do accumulation and all-reduces in fp32, we need to have local DDP
     # and we should make sure use-contiguous-buffers-in-local-ddp is not off.
@@ -275,17 +271,14 @@ def parse_args(extra_args_provider=None, defaults={},
 
 def _print_args(args):
     """Print arguments."""
-    if args.rank == 0:
-        print('------------------------ arguments ------------------------',
-              flush=True)
-        str_list = []
-        for arg in vars(args):
-            dots = '.' * (48 - len(arg))
-            str_list.append('  {} {} {}'.format(arg, dots, getattr(args, arg)))
-        for arg in sorted(str_list, key=lambda x: x.lower()):
-            print(arg, flush=True)
-        print('-------------------- end of arguments ---------------------',
-              flush=True)
+    logger.info('------------------------ arguments ------------------------')
+    str_list = []
+    for arg in vars(args):
+        dots = '.' * (48 - len(arg))
+        str_list.append('  {} {} {}'.format(arg, dots, getattr(args, arg)))
+    for arg in sorted(str_list, key=lambda x: x.lower()):
+        logger.info(arg)
+    logger.info('-------------------- end of arguments ---------------------')
 
 
 def _check_arg_is_not_none(args, arg):
@@ -350,8 +343,12 @@ def _add_network_size_args(parser):
 def _add_logging_args(parser):
     group = parser.add_argument_group(title='logging')
 
+    group.add_argument('--name', type=str, default=None,
+                       help='A name for the experiment.')
     group.add_argument('--log-params-norm', action='store_true',
                        help='If set, calculate and log parameters norm.')
+    group.add_argument('--log-scales', action='store_true',
+                       help='Log the scales of parameters, gradients and activations.')
     group.add_argument('--log-num-zeros-in-grad', action='store_true',
                        help='If set, calculate and log the number of zeros in gradient.')
     group.add_argument('--tensorboard-log-interval', type=int, default=1,
@@ -708,6 +705,8 @@ def _add_data_args(parser):
                        '1) a single data path, 2) multiple datasets in the'
                        'form: dataset1-weight dataset1-path dataset2-weight '
                        'dataset2-path ...')
+    group.add_argument('--indexmap-path', type=str, default=None,
+                       help='Path for intermediate data files')
     group.add_argument('--split', type=str, default='969, 30, 1',
                        help='Comma-separated list of proportions for training,'
                        ' validation, and test split. For example the split '

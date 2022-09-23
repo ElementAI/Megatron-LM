@@ -21,6 +21,7 @@ import torch.nn.functional as F
 from megatron import get_args
 from megatron import mpu
 from .module import MegatronModule
+from megatron.metrics import record_scale
 from megatron.model.enums import LayerType, AttnMaskType
 from megatron.model.transformer import ParallelTransformer
 from megatron.model.utils import get_linear_layer
@@ -48,7 +49,7 @@ def get_language_model(num_tokentypes, add_pooler,
                        scaled_init_method=None, add_encoder=True,
                        add_decoder=False,
                        decoder_attn_mask_type=AttnMaskType.causal,
-                       pre_process=True, post_process=True):
+                       pre_process=True, post_process=True, name_=""):
     """Build language model and return along with the key to save."""
     args = get_args()
 
@@ -70,7 +71,8 @@ def get_language_model(num_tokentypes, add_pooler,
         decoder_attn_mask_type=decoder_attn_mask_type,
         add_pooler=add_pooler,
         pre_process=pre_process,
-        post_process=post_process
+        post_process=post_process,
+        name_=name_
     )
     # key used for checkpoints.
     language_model_key = 'language_model'
@@ -90,16 +92,20 @@ class Pooler(MegatronModule):
             bias is set to zero.
     """
 
-    def __init__(self, hidden_size, init_method):
+    def __init__(self, hidden_size, init_method, name_=""):
         super(Pooler, self).__init__()
-        self.dense = get_linear_layer(hidden_size, hidden_size, init_method)
+        self.name_=name_
+        self.dense = get_linear_layer(hidden_size, hidden_size, init_method, name_=f"{self.name_}.dense")
 
     def forward(self, hidden_states, sequence_index=0):
         # hidden_states: [b, s, h]
         # sequence_index: index of the token to pool.
+        record_scale(f"{self.name_}.input",hidden_states)
         pooled = hidden_states[:, sequence_index, :]
+        record_scale(f"{self.name_}.pooled",pooled)
         pooled = self.dense(pooled)
         pooled = torch.tanh(pooled)
+        record_scale(f"{self.name_}.tanh",pooled)
         return pooled
 
 
@@ -123,7 +129,8 @@ class Embedding(MegatronModule):
                  max_sequence_length,
                  embedding_dropout_prob,
                  init_method,
-                 num_tokentypes=0):
+                 num_tokentypes=0,
+                 name_=""):
         super(Embedding, self).__init__()
 
         self.hidden_size = hidden_size
@@ -131,17 +138,22 @@ class Embedding(MegatronModule):
         self.num_tokentypes = num_tokentypes
 
         args = get_args()
+        self.name_=name_
 
         # Word embeddings (parallel).
         self.word_embeddings = mpu.VocabParallelEmbedding(
             vocab_size, self.hidden_size,
             init_method=self.init_method)
         self._word_embeddings_key = 'word_embeddings'
+        self.word_embeddings.name_=f"{self.name_}.word_embeddings"
+        self.word_embeddings.weight.name_=f"{self.word_embeddings.name_}.embedding_weight"
 
         # Position embedding (serial).
         self.position_embeddings = torch.nn.Embedding(
             max_sequence_length, self.hidden_size)
         self._position_embeddings_key = 'position_embeddings'
+        self.position_embeddings.name_=f"{self.name_}.position_embeddings"
+        self.position_embeddings.weight.name_=f"{self.position_embeddings.name_}.embedding_weight"
         # Initialize the position embeddings.
         self.init_method(self.position_embeddings.weight)
 
@@ -153,6 +165,8 @@ class Embedding(MegatronModule):
         if self.num_tokentypes > 0:
             self.tokentype_embeddings = torch.nn.Embedding(self.num_tokentypes,
                                                            self.hidden_size)
+            self.tokentype_embeddings.name_=f"{self.name_}.tokentype_embeddings"
+            self.tokentype_embeddings.weight.name_=f"{self.tokentype_embeddings.name_}.embedding_weight"
             # Initialize the token-type embeddings.
             self.init_method(self.tokentype_embeddings.weight)
         else:
@@ -190,17 +204,24 @@ class Embedding(MegatronModule):
 
     def forward(self, input_ids, position_ids, tokentype_ids=None):
         # Embeddings.
+        args=get_args()
         words_embeddings = self.word_embeddings(input_ids)
+        record_scale(self.word_embeddings.name_,words_embeddings)
         position_embeddings = self.position_embeddings(position_ids)
+        record_scale(self.position_embeddings.name_,position_embeddings)
         embeddings = words_embeddings + position_embeddings
         if tokentype_ids is not None:
             assert self.tokentype_embeddings is not None
-            embeddings = embeddings + self.tokentype_embeddings(tokentype_ids)
+            tokentype_embeddings=self.tokentype_embeddings(tokentype_ids)
+            record_scale(self.tokentype_embeddings.name_,tokentype_embeddings)
+            embeddings = embeddings + tokentype_embeddings
         else:
             assert self.tokentype_embeddings is None
 
+        record_scale(f"{self.name_}.embeddings",embeddings)
         # Dropout.
         embeddings = self.embedding_dropout(embeddings)
+        record_scale(f"{self.name_}.dropout",embeddings)
 
         return embeddings
 
@@ -290,9 +311,11 @@ class TransformerLanguageModel(MegatronModule):
                  decoder_attn_mask_type=AttnMaskType.causal,
                  add_pooler=False,
                  pre_process=True,
-                 post_process=True):
+                 post_process=True,
+                 name_=""):
         super(TransformerLanguageModel, self).__init__()
         args = get_args()
+        self.name_ = name_
 
         self.pre_process = pre_process
         self.post_process = post_process
@@ -313,7 +336,8 @@ class TransformerLanguageModel(MegatronModule):
                                        args.max_position_embeddings,
                                        args.hidden_dropout,
                                        self.init_method,
-                                       self.num_tokentypes)
+                                       self.num_tokentypes,
+                                       name_=f"{self.name_}.input_layer.embedding")
             self._embedding_key = 'embedding'
 
         # Transformer.
@@ -325,7 +349,8 @@ class TransformerLanguageModel(MegatronModule):
                 output_layer_init_method,
                 self_attn_mask_type=self.encoder_attn_mask_type,
                 pre_process=self.pre_process,
-                post_process=self.post_process
+                post_process=self.post_process,
+                name_=self.name_,
             )
             self._encoder_key = 'encoder'
         else:
@@ -340,7 +365,9 @@ class TransformerLanguageModel(MegatronModule):
                 layer_type=LayerType.decoder,
                 self_attn_mask_type=self.decoder_attn_mask_type,
                 pre_process=self.pre_process,
-                post_process=self.post_process)
+                post_process=self.post_process,
+                name_=f"{self.name_}.decoder"
+            )
             self._decoder_key = 'decoder'
         else:
             self.decoder = None
@@ -348,7 +375,7 @@ class TransformerLanguageModel(MegatronModule):
         if self.post_process:
             # Pooler.
             if self.add_pooler:
-                self.pooler = Pooler(self.hidden_size, self.init_method)
+                self.pooler = Pooler(self.hidden_size, self.init_method, name_=f"{self.name_}.output_layer.sop_head")
                 self._pooler_key = 'pooler'
 
     def set_input_tensor(self, input_tensor):
